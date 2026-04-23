@@ -324,6 +324,11 @@ export function buildRequest(
   } else {
     // 默认处理（GRS AI 或 Gemini 无参考图）
     body = deepReplaceVariables(config.requestBodyTemplate, allVariables);
+    
+    // 🔧 诊断日志：打印模板和替换结果
+    console.log('[buildRequest] 模板:', JSON.stringify(config.requestBodyTemplate, null, 2));
+    console.log('[buildRequest] 变量:', JSON.stringify(allVariables, null, 2));
+    console.log('[buildRequest] 替换后:', JSON.stringify(body, null, 2));
   }
 
   // 特殊处理：确保 urls 字段始终是数组（修复 JSON unmarshal 错误）

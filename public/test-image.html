@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>图片显示测试 - 3:4竖图</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { margin: 0; padding: 0; }
+  </style>
+</head>
+<body class="bg-gray-100">
+  <h1 class="text-center p-4 text-xl font-bold">图片显示测试 - 3:4竖图 vs 16:9横图</h1>
+  
+  <div class="flex gap-4 p-4">
+    <!-- 测试1：3:4 竖图 -->
+    <div class="flex-1">
+      <h2 class="text-center mb-2 font-bold">测试1: 3:4 竖图</h2>
+      <div class="flex border border-gray-300 rounded-lg overflow-hidden" style="height: 500px;">
+        <!-- 大图展示区 -->
+        <div class="flex-1 bg-gray-200 min-w-0 min-h-0 relative overflow-hidden">
+          <div class="absolute inset-0 flex items-center justify-center p-4">
+            <!-- 3:4 竖图 -->
+            <img 
+              src="https://picsum.photos/300/400" 
+              alt="测试竖图 3:4"
+              class="block max-w-full max-h-full object-contain cursor-pointer"
+              style="width: auto; height: auto;"
+            />
+          </div>
+          <div class="absolute top-3 left-3 bg-black/50 text-white text-xs px-2 py-1 rounded">1 / 1</div>
+          <button class="absolute bottom-3 right-3 bg-pink-500 text-white px-3 py-1 rounded text-sm">下载</button>
+        </div>
+        <!-- 右侧信息面板 -->
+        <div class="w-48 bg-gray-50 border-l p-3 overflow-y-auto flex-shrink-0">
+          <h3 class="font-semibold mb-3 text-sm">生成信息</h3>
+          <p class="text-xs text-gray-600 mb-2">模型: nano-banana-fast</p>
+          <p class="text-xs text-gray-600 mb-2">分辨率: 1K</p>
+          <p class="text-xs text-gray-600 mb-2">宽高比: 3:4</p>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 测试2：16:9 横图 -->
+    <div class="flex-1">
+      <h2 class="text-center mb-2 font-bold">测试2: 16:9 横图</h2>
+      <div class="flex border border-gray-300 rounded-lg overflow-hidden" style="height: 500px;">
+        <!-- 大图展示区 -->
+        <div class="flex-1 bg-gray-200 min-w-0 min-h-0 relative overflow-hidden">
+          <div class="absolute inset-0 flex items-center justify-center p-4">
+            <!-- 16:9 横图 -->
+            <img 
+              src="https://picsum.photos/800/450" 
+              alt="测试横图 16:9"
+              class="block max-w-full max-h-full object-contain cursor-pointer"
+              style="width: auto; height: auto;"
+            />
+          </div>
+          <div class="absolute top-3 left-3 bg-black/50 text-white text-xs px-2 py-1 rounded">1 / 1</div>
+          <button class="absolute bottom-3 right-3 bg-pink-500 text-white px-3 py-1 rounded text-sm">下载</button>
+        </div>
+        <!-- 右侧信息面板 -->
+        <div class="w-48 bg-gray-50 border-l p-3 overflow-y-auto flex-shrink-0">
+          <h3 class="font-semibold mb-3 text-sm">生成信息</h3>
+          <p class="text-xs text-gray-600 mb-2">模型: nano-banana-fast</p>
+          <p class="text-xs text-gray-600 mb-2">分辨率: 1K</p>
+          <p class="text-xs text-gray-600 mb-2">宽高比: 16:9</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="p-4 text-center">
+    <p class="text-gray-600">如果图片完整显示且居中，说明CSS正确</p>
+    <p class="text-gray-600">如果图片被裁剪，说明有问题</p>
+  </div>
+</body>
+</html>

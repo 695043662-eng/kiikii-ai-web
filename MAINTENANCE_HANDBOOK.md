@@ -118,11 +118,7 @@
 | #257 | 发送到画布无图片 | addSingleImageToCanvas 添加 img.src = imgUrl | ✅ 已修复 | |
 | #258 | 占位符比例不一致（1:1变3:4填灰） | onComplete 调用 updatePlaceholder 复用尺寸计算 | ✅ 已修复 | 核心必读 |
 | #259 | 展示/启用按钮失效 | 废除 hidden-models.json，全线回归数据库管理 | ✅ 已修复 | 核心必读 |
-| #239 | 参考图删除后Ref残留 | 删除时同步清理Ref+发送前强制过滤 | ✅ 已修复 | 核心必读 |
-| #240 | 再次生成幽灵MD5+无限上传中 | State+Ref同步清空+MD5重复也递减计数+finally清空input | ✅ 已修复 | 核心必读 |
-| #241 | 参考图清空点Ref遗漏 | 地毯式排查所有清空点同步更新Ref | ✅ 已修复 | 核心必读 |
-| #242 | 再次生成幽灵MD5+历史记录未存MD5 | onOptimisticUpdate同步Ref+saveHistoryRecord添加referenceImageMd5s参数 | ✅ 已修复 | 核心必读 |
-| #243 | 军师方案：全时监听+联动清空+计数器精准修复 | useEffect联动清空+先计算实际处理数再递增 | ✅ 已修复 | 核心必读 |
+| #260 | 新架构请求失败 "apikey is empty" | request_headers 缺少 Authorization header | ✅ 已修复 | 核心必读 |
 
 ---
 
@@ -3168,6 +3164,51 @@ if (existingMd5s.includes(result.md5)) {
 
 ### 状态
 ✅ 已修复
+
+---
+
+### #260 - 新架构请求失败 "apikey is empty"（CRITICAL）
+
+**问题描述**：
+- 使用新架构（数据库模板）请求 gpt-image-2 模型时失败
+- 错误信息：`{"code":-1,"data":null,"msg":"apikey is empty"}`
+- 数据库 `api_key` 字段有值，但请求未发送 API Key
+
+**根因分析**：
+数据库 `api_configs` 表的 `request_headers` 字段只有 `Content-Type`，缺少 `Authorization` header。
+
+旧架构硬编码了 `Authorization: Bearer ${apiKey}`，但新架构依赖数据库模板，模板中没有这个 header，导致 `buildRequest` 函数无法将 `apiKey` 注入到请求头中。
+
+**修复方案**：
+更新数据库 `api_configs` 表 id=7 的 `request_headers` 字段：
+```sql
+UPDATE api_configs
+SET request_headers = '{"Content-Type": "application/json", "Authorization": "Bearer ${apiKey}"}'
+WHERE id = 7;
+```
+
+**关键代码**：
+```typescript
+// buildRequest 函数将 apiKey 添加到变量中
+const allVariables = {
+  ...variables,
+  apiKey: config.apiKey,  // apiKey 来自数据库 api_configs.api_key
+  model: config.modelId,
+};
+
+// 深度替换请求头中的变量
+let headers = deepReplaceVariables(config.requestHeaders, allVariables);
+// 替换后：Authorization: Bearer sk-xxx...
+```
+
+**验证测试**：
+- ✅ gpt-image-2：`{"code":0,"data":{"id":"..."},"msg":"success"}`
+- ✅ nano-banana-fast：SSE 流式数据，`"status":"running"`
+
+**修改文件**：
+- 数据库 `api_configs` 表 id=7 的 `request_headers` 字段
+
+**状态**：✅ 已修复
 
 ---
 

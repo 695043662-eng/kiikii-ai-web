@@ -57,7 +57,8 @@ export async function getModelAPIConfigFull(modelId: string): Promise<ApiConfigF
   // 2. 创建查询 Promise 并缓存（后续并发请求会命中缓存，共享这个 Promise）
   const queryPromise = (async () => {
     try {
-      const supabase = getSupabaseClient();
+      // 🔧 修复：使用 Service Role 客户端绕过 RLS 策略
+      const supabase = getSupabaseClient(undefined, true);
       
       // 从 api_models 表查找模型
       const { data: model, error: modelError } = await supabase

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Loader2, User, Mail, Lock, Phone, ArrowRight, Sparkles, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,16 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login', onLo
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [countdown, setCountdown] = useState(0);
+
+  // 重置状态：当 modal 打开或关闭时
+  useEffect(() => {
+    if (isOpen) {
+      // 打开时重置所有状态
+      setSuccess(false);
+      setError('');
+      setLoading(false);
+    }
+  }, [isOpen]);
 
   // 登录表单
   const [loginData, setLoginData] = useState({
@@ -178,9 +188,20 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login', onLo
       if (data.success) {
         setSuccess(true);
         setTimeout(() => {
+          // 🔧 关键修复：先重置状态
+          setSuccess(false);
+          setError('');
+          setLoading(false);
+          
+          // 🔧 关键修复：触发全局登录成功事件，通知 Context 刷新用户信息
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('user-login-success'));
+          }
+          
+          // 然后通知父组件并关闭
           onLoginSuccess(data.data);
           onClose();
-        }, 1000);
+        }, 800);
       } else {
         setError(data.error || '登录失败');
       }

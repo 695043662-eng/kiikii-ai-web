@@ -740,9 +740,14 @@ export default function CanvasPage() {
   }, []);
 
   const handleLoginSuccess = (user: any) => {
-    // 【isLoggedIn 已由 AIGeneratorContext 统一管理，无需手动设置】
+    // 🔧 关键修复：清除缓存后刷新用户信息
     setAuthModalOpen(false);
-    // Context 会自动监听登录状态变化
+    // 清除缓存并刷新用户信息（由 Context 处理）
+    // 注意：refreshUserInfo 由 AIGeneratorContext 提供，这里需要调用
+    if (typeof window !== 'undefined') {
+      // 触发全局事件，通知 Context 刷新用户信息
+      window.dispatchEvent(new CustomEvent('user-login-success'));
+    }
   };
   
   return (

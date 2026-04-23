@@ -18,7 +18,7 @@ import HistoryPromptsDialog, { savePromptToLocal } from '@/components/HistoryPro
 import HistoryRecordsDialog from '@/components/HistoryRecordsDialog';
 import { generateStore, GenerationTask } from '@/store/generateStore';
 import { toast } from 'sonner';
-import { fetchUserWithCache, updateCachedCredits } from '@/lib/user-cache';
+import { fetchUserWithCache, updateCachedCredits, clearCachedUser } from '@/lib/user-cache';
 import RoseCurveAnimation from '@/components/canvas/RoseCurve';
 import { useTheme } from 'next-themes';
 import { useAIGenerator } from '@/contexts/AIGeneratorContext';
@@ -522,6 +522,8 @@ export default function SingleGeneratePage() {
   const handleLoginSuccess = (user: any) => {
     ctxSetIsLoggedIn(true);
     setAuthModalOpen(false);
+    // 🔧 关键修复：清除缓存后再刷新，确保获取最新用户信息
+    clearCachedUser();
     refreshUserInfo();
   };
 

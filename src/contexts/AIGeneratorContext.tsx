@@ -330,6 +330,19 @@ export function AIGeneratorProvider({ children }: { children: React.ReactNode })
     return () => window.removeEventListener('creditsChanged', handleCreditsChanged);
   }, [refreshUserInfo]);
 
+  // 🔧 监听登录成功事件
+  useEffect(() => {
+    const handleLoginSuccess = () => {
+      console.log('[AIGeneratorContext] 收到登录成功事件，清除缓存并刷新');
+      clearCachedUser();
+      setIsLoggedIn(true);
+      refreshUserInfo();
+    };
+    
+    window.addEventListener('user-login-success', handleLoginSuccess);
+    return () => window.removeEventListener('user-login-success', handleLoginSuccess);
+  }, [refreshUserInfo]);
+
   // ========== 加载模型配置 ==========
   useEffect(() => {
     const fetchModelConfig = async () => {

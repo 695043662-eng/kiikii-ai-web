@@ -115,6 +115,8 @@
 | #254 | 轮询返回空 imageUrls 导致历史记录不保存 | GET API 从 imageItems 提取实际 URL | ✅ 已修复 | 核心必读 |
 | #255 | 再次生成覆盖左侧操作容器 | 方案A：删除替换左侧State的逻辑，保护用户输入 | ✅ 已修复 | 核心必读 |
 | #256 | 违规显示"生成失败"而非"内容违规" | 定时检查从imageItems提取错误信息，支持特定错误类型 | ✅ 已修复 | |
+| #257 | 发送到画布无图片 | addSingleImageToCanvas 添加 img.src = imgUrl | ✅ 已修复 | |
+| #258 | 占位符比例不一致（1:1变3:4填灰） | onComplete 调用 updatePlaceholder 复用尺寸计算 | ✅ 已修复 | 核心必读 |
 | #239 | 参考图删除后Ref残留 | 删除时同步清理Ref+发送前强制过滤 | ✅ 已修复 | 核心必读 |
 | #240 | 再次生成幽灵MD5+无限上传中 | State+Ref同步清空+MD5重复也递减计数+finally清空input | ✅ 已修复 | 核心必读 |
 | #241 | 参考图清空点Ref遗漏 | 地毯式排查所有清空点同步更新Ref | ✅ 已修复 | 核心必读 |
@@ -3211,6 +3213,71 @@ await new Promise<void>((resolve) => {
 ### 修改文件
 - `src/app/canvas/page.tsx`
   - `addSingleImageToCanvas` 函数添加 `img.src = imgUrl`
+
+### 状态
+✅ 已修复
+
+---
+
+## #258 占位符比例不一致（CRITICAL）
+
+**发现日期**：2025-01-09
+**修复日期**：2025-01-09
+
+### 问题描述
+- 用户选择 `auto` 或某个比例生成图片，占位符是 1:1 正方形
+- 后端返回 3:4 图片时，偶尔会出现左右填灰的情况
+- 如果是 4:3，则上下填灰
+
+### 根因分析
+**`onComplete` 兜底逻辑没有重新计算元素尺寸！**
+
+| 路径 | 代码位置 | 尺寸处理 |
+|------|---------|---------|
+| SSE 流正常 | `updatePlaceholder` | ✅ 获取图片实际尺寸，按比例更新 |
+| SSE 流异常 | `onComplete` 兜底 | ❌ 直接使用占位符原始尺寸（#214 简化版） |
+
+问题链路：
+```
+用户选择 auto 比例
+  → 占位符创建为 1:1 正方形
+  → 后端返回 3:4 图片
+  → SSE 流正常 → updatePlaceholder → 元素尺寸正确 ✅
+  → SSE 流异常 → onComplete 兜底 → 元素保持 1:1 尺寸 ❌
+  → Canvas 渲染：图片被拉伸或留白
+```
+
+### 历史原因
+#214 修复时用的是"简化版"，注释明确写着：
+```typescript
+// 直接更新元素状态（简化版，不重新计算尺寸）
+```
+
+当时优先级是让占位符消失，没考虑到尺寸不一致问题。
+
+### 修复方案
+**升级 #214 为"完整版 B"**：在 `onComplete` 兜底逻辑中调用 `updatePlaceholder`
+
+```typescript
+// 🔧 升级：复用 updatePlaceholder 的尺寸计算逻辑，解决比例不一致问题
+updatePlaceholder(elementIdToUse, p.imageUrl, p.imageKey);
+```
+
+对于元素不存在需要重新添加的情况，也增加了图片尺寸获取逻辑：
+```typescript
+const img = new window.Image();
+img.src = p.imageUrl;
+img.onload = () => {
+  const imgAspect = img.naturalWidth / img.naturalHeight;
+  // 按图片实际比例调整尺寸
+  // 居中定位
+};
+```
+
+### 修改文件
+- `src/app/canvas/page.tsx`
+  - `onComplete` 回调：元素存在时调用 `updatePlaceholder`
+  - `onComplete` 回调：元素不存在时获取图片尺寸再添加
 
 ### 状态
 ✅ 已修复

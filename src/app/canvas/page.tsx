@@ -3495,15 +3495,11 @@ function CanvasApp({ canvas, router }: { canvas: CanvasContextType; router: Retu
               const liveElements = canvas.stateRef?.current?.elements || canvas.state.elements;
               const el = liveElements.find((e: any) => e.id === elementIdToUse);
               if (el && el.generationStatus !== 'completed') {
-                console.log(`[Canvas onComplete] #214 更新占位符: elementId=${elementIdToUse}, index=${p.index}, originalId=${p.placeholderId}`);
-                // 直接更新元素状态（简化版，不重新计算尺寸）
-                canvas.updateElement(elementIdToUse, {
-                  imageUrl: p.imageUrl,
-                  imageKey: p.imageKey,
-                  generationStatus: 'completed',
-                });
+                console.log(`[Canvas onComplete] #214 调用 updatePlaceholder 确保尺寸正确: elementId=${elementIdToUse}, index=${p.index}`);
+                // 🔧 升级：复用 updatePlaceholder 的尺寸计算逻辑，解决比例不一致问题
+                updatePlaceholder(elementIdToUse, p.imageUrl, p.imageKey);
               } else if (!el) {
-                // 元素确实不存在，尝试重新添加
+                // 元素确实不存在，尝试重新添加（需要获取图片实际尺寸）
                 console.warn(`[Canvas onComplete] #214 元素不存在，尝试重新添加: elementId=${elementIdToUse}`);
                 
                 // 🔧 #216 修复：先删除画布上相同 taskId 的旧占位符
@@ -3521,28 +3517,83 @@ function CanvasApp({ canvas, router }: { canvas: CanvasContextType; router: Retu
                 
                 const pos = placeholderPositionsRef.current.get(taskId || '');
                 if (pos && p.imageUrl) {
-                  const newElementId = canvas.addElement({
-                    type: 'image',
-                    name: `生成图片 #${p.index + 1}`,
-                    x: pos.left,
-                    y: pos.top,
-                    width: pos.right - pos.left,
-                    height: pos.bottom - pos.top,
-                    rotation: 0,
-                    fill: 'transparent',
-                    stroke: 'transparent',
-                    strokeWidth: 0,
-                    opacity: 1,
-                    visible: true,
-                    locked: false,
-                    imageUrl: p.imageUrl,
-                    imageKey: p.imageKey,
-                    generationStatus: 'completed' as const,
-                  });
-                  if (taskId) {
-                    taskIdToElementIdRef.current.set(taskId, newElementId);
-                  }
-                  console.log(`[Canvas onComplete] #214 重新添加成功: newId=${newElementId}`);
+                  // 🔧 升级：获取图片实际尺寸，按比例计算元素尺寸
+                  const img = new window.Image();
+                  img.src = p.imageUrl;
+                  img.onload = () => {
+                    const naturalWidth = img.naturalWidth;
+                    const naturalHeight = img.naturalHeight;
+                    const imgAspect = naturalWidth / naturalHeight;
+                    
+                    // 占位符原始尺寸
+                    const placeholderWidth = pos.right - pos.left;
+                    const placeholderHeight = pos.bottom - pos.top;
+                    const placeholderAspect = placeholderWidth / placeholderHeight;
+                    
+                    // 按图片实际比例调整尺寸
+                    let newWidth: number, newHeight: number;
+                    if (imgAspect > placeholderAspect) {
+                      newWidth = placeholderWidth;
+                      newHeight = newWidth / imgAspect;
+                    } else {
+                      newHeight = placeholderHeight;
+                      newWidth = newHeight * imgAspect;
+                    }
+                    
+                    // 居中定位
+                    const centerX = pos.left + placeholderWidth / 2;
+                    const centerY = pos.top + placeholderHeight / 2;
+                    const newX = centerX - newWidth / 2;
+                    const newY = centerY - newHeight / 2;
+                    
+                    const newElementId = canvas.addElement({
+                      type: 'image',
+                      name: `生成图片 #${p.index + 1}`,
+                      x: newX,
+                      y: newY,
+                      width: newWidth,
+                      height: newHeight,
+                      rotation: 0,
+                      fill: 'transparent',
+                      stroke: 'transparent',
+                      strokeWidth: 0,
+                      opacity: 1,
+                      visible: true,
+                      locked: false,
+                      imageUrl: p.imageUrl,
+                      imageKey: p.imageKey,
+                      generationStatus: 'completed' as const,
+                    });
+                    if (taskId) {
+                      taskIdToElementIdRef.current.set(taskId, newElementId);
+                    }
+                    console.log(`[Canvas onComplete] #214 重新添加成功（尺寸已调整）: newId=${newElementId}, size=${newWidth}x${newHeight}`);
+                  };
+                  img.onerror = () => {
+                    console.error(`[Canvas onComplete] #214 图片加载失败，使用占位符原始尺寸: ${p.imageUrl}`);
+                    // 降级：使用占位符原始尺寸
+                    const newElementId = canvas.addElement({
+                      type: 'image',
+                      name: `生成图片 #${p.index + 1}`,
+                      x: pos.left,
+                      y: pos.top,
+                      width: pos.right - pos.left,
+                      height: pos.bottom - pos.top,
+                      rotation: 0,
+                      fill: 'transparent',
+                      stroke: 'transparent',
+                      strokeWidth: 0,
+                      opacity: 1,
+                      visible: true,
+                      locked: false,
+                      imageUrl: p.imageUrl,
+                      imageKey: p.imageKey,
+                      generationStatus: 'completed' as const,
+                    });
+                    if (taskId) {
+                      taskIdToElementIdRef.current.set(taskId, newElementId);
+                    }
+                  };
                 }
               }
             }

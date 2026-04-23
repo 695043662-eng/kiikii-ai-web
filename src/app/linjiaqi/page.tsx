@@ -803,22 +803,9 @@ export default function AdminDashboard() {
     };
 
     const handleVisibleToggle = async () => {
+      // 🔧 重构：直接更新数据库 is_visible 字段，不再使用 hidden-models.json
       const newVisible = config.is_visible !== false;
-      // updateModelCredits 内部已有乐观更新，不需要重复
       await updateModelCredits(config.id, 'is_visible', !newVisible);
-      
-      // 同步到 hidden-models.json（供前端 config API 即时读取）
-      try {
-        // #110 修复：添加 credentials: 'include' 确保请求携带 cookie
-        await fetch('/api/linjiaqi/hidden-models', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ model_id: config.model_key, is_visible: !newVisible }),
-        });
-      } catch (e) {
-        console.error('同步隐藏模型配置失败:', e);
-      }
     };
 
     const style = {

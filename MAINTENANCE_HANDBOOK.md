@@ -117,6 +117,7 @@
 | #256 | 违规显示"生成失败"而非"内容违规" | 定时检查从imageItems提取错误信息，支持特定错误类型 | ✅ 已修复 | |
 | #257 | 发送到画布无图片 | addSingleImageToCanvas 添加 img.src = imgUrl | ✅ 已修复 | |
 | #258 | 占位符比例不一致（1:1变3:4填灰） | onComplete 调用 updatePlaceholder 复用尺寸计算 | ✅ 已修复 | 核心必读 |
+| #259 | 展示/启用按钮失效 | 废除 hidden-models.json，全线回归数据库管理 | ✅ 已修复 | 核心必读 |
 | #239 | 参考图删除后Ref残留 | 删除时同步清理Ref+发送前强制过滤 | ✅ 已修复 | 核心必读 |
 | #240 | 再次生成幽灵MD5+无限上传中 | State+Ref同步清空+MD5重复也递减计数+finally清空input | ✅ 已修复 | 核心必读 |
 | #241 | 参考图清空点Ref遗漏 | 地毯式排查所有清空点同步更新Ref | ✅ 已修复 | 核心必读 |
@@ -3281,6 +3282,86 @@ img.onload = () => {
 
 ### 状态
 ✅ 已修复
+
+---
+
+## #259 废除 hidden-models.json 双头管理模式（CRITICAL）
+
+**发现日期**：2025-01-09
+**修复日期**：2025-01-09
+
+### 问题描述
+- 管理后台"展示"按钮看似有用，但实际是靠 `hidden-models.json` 文件兜底
+- 管理后台"启用"按钮完全无效，因为只依赖数据库 `is_active` 字段
+- 数据库 `api_models` 和 `api_configs` 表缺少 `is_visible` 字段
+- 双头管理导致数据不一致，难以维护
+
+### 根因分析
+**双写逻辑的隐患**：
+```javascript
+// 旧代码
+const handleVisibleToggle = async () => {
+  // 1. 更新数据库（失败，字段不存在）
+  await updateModelCredits(config.id, 'is_visible', !newVisible);
+  
+  // 2. 写入 hidden-models.json（成功）
+  await fetch('/api/linjiaqi/hidden-models', { ... });
+};
+```
+
+**问题链路**：
+```
+用户点击"展示"按钮
+  → 数据库更新失败（is_visible 字段不存在）
+  → hidden-models.json 写入成功
+  → 前端读取 hidden-models.json 过滤模型
+  → 看起来有用，但数据不一致
+```
+
+### 修复方案
+**彻底废除 JSON 文件，全线回归数据库管理**：
+
+1. **删除文件**：
+   - `hidden-models.json`（数据文件）
+   - `/api/linjiaqi/hidden-models`（API 路由）
+
+2. **重构管理后台**：
+```javascript
+// 新代码
+const handleVisibleToggle = async () => {
+  // 直接更新数据库，不再使用 JSON 文件
+  await updateModelCredits(config.id, 'is_visible', !newVisible);
+};
+```
+
+3. **重构前端过滤逻辑**：
+```javascript
+// 新代码：直接使用数据库字段过滤
+const visibleModels = allModels.filter(m => 
+  m.is_active !== false && m.is_visible !== false
+);
+```
+
+4. **数据库字段**（需手动执行）：
+```sql
+ALTER TABLE api_models ADD COLUMN IF NOT EXISTS is_visible BOOLEAN DEFAULT TRUE;
+ALTER TABLE api_configs ADD COLUMN IF NOT EXISTS is_visible BOOLEAN DEFAULT TRUE;
+UPDATE api_models SET is_visible = TRUE WHERE is_visible IS NULL;
+UPDATE api_configs SET is_visible = TRUE WHERE is_visible IS NULL;
+```
+
+### 修改文件
+- `src/app/linjiaqi/page.tsx`
+  - `handleVisibleToggle`：移除 hidden-models.json 调用
+- `src/app/api/config/route.ts`
+  - 模型过滤：移除 hidden-models.json 引用，直接使用 is_active/is_visible
+- `src/app/api/linjiaqi/hidden-models/route.ts`：删除
+- `hidden-models.json`：删除
+- `src/storage/database/shared/schema.ts`
+  - 添加 is_visible 字段定义
+
+### 状态
+✅ 已修复（需在 Supabase 控制台执行 SQL）
 
 ---
 

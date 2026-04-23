@@ -307,31 +307,11 @@ export async function GET(request: Request) {
       return (MODEL_SORT_ORDER[a.model_id] ?? 999) - (MODEL_SORT_ORDER[b.model_id] ?? 999);
     });
 
-    // #202 兼容处理：检查是否有 is_visible 字段
-    const hasVisibleField = allModels.some(m => m.is_visible !== undefined);
-
-    let visibleModels;
-    if (hasVisibleField) {
-      // 数据库有 is_visible 字段，直接使用
-      visibleModels = allModels.filter(m => m.is_visible !== false);
-      console.log(`[config] 使用 is_visible 字段过滤: 总数=${allModels.length}, 可见=${visibleModels.length}`);
-    } else {
-      // 数据库没有 is_visible 字段，回退到 hidden-models.json
-      let hiddenModels: Set<string> = new Set();
-      try {
-        const fs = require('fs');
-        const path = require('path');
-        const hiddenPath = path.join(process.cwd(), 'hidden-models.json');
-        if (fs.existsSync(hiddenPath)) {
-          const data = JSON.parse(fs.readFileSync(hiddenPath, 'utf-8'));
-          hiddenModels = new Set(data.hidden || []);
-        }
-      } catch (e) {
-        // 文件不存在或读取失败，所有模型可见
-      }
-      visibleModels = allModels.filter(m => !hiddenModels.has(m.model_id));
-      console.log(`[config] 使用 hidden-models.json 过滤: 总数=${allModels.length}, 可见=${visibleModels.length}, 隐藏=${hiddenModels.size}`);
-    }
+    // 🔧 重构：直接使用数据库 is_visible 和 is_active 字段过滤
+    // 移除 hidden-models.json 的双头管理模式
+    const visibleModels = allModels.filter(m => 
+      m.is_active !== false && m.is_visible !== false
+    );
 
     console.log(`[config] 模型过滤: 总数=${allModels.length}, 可见=${visibleModels.length}`);
 

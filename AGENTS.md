@@ -118,6 +118,7 @@
 | #256 | 违规显示"生成失败"而非"内容违规" | 定时检查从imageItems提取错误信息，支持特定错误类型 | ✅ 已修复 |
 | #257 | 发送到画布无图片 | addSingleImageToCanvas 添加 img.src = imgUrl | ✅ 已修复 |
 | #258 | 占位符比例不一致（1:1变3:4填灰） | onComplete 调用 updatePlaceholder 复用尺寸计算 | ✅ 已修复 |
+| #259 | 展示/启用按钮失效 | 废除 hidden-models.json，全线回归数据库管理 | ✅ 已修复 |
 
 ### #001 关键案例（必读）
 

@@ -722,8 +722,8 @@ export default function AdminDashboard() {
       ));
       console.log(`[排序] ${modelType} 模型排序保存成功`);
       
-      // 刷新 apiModels 数据
-      fetchApiConfig();
+      // #277 修复：等待数据库更新完成后再刷新数据
+      await fetchApiConfig();
     } catch (error) {
       console.error('更新排序失败:', error);
     }

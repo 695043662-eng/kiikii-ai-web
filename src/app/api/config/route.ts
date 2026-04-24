@@ -282,29 +282,16 @@ export async function GET(request: Request) {
       };
     });
 
-    // 合并所有模型，按硬编码排序映射排序
-    // 注意：Gemini 已插入 api_models 表，不再需要 additionalModels 补充
-    const MODEL_SORT_ORDER: Record<string, number> = {
-      // 图片生成模型
-      'nano-banana-fast': 1,
-      'nano-banana': 2,
-      'nano-banana-2': 3,
-      'nano-banana-2-cl': 4,
-      'nano-banana-2-4k-cl': 5,
-      'nano-banana-pro': 6,
-      'nano-banana-pro-vt': 7,
-      'nano-banana-pro-cl': 8,
-      'nano-banana-pro-vip': 9,
-      'nano-banana-pro-4k-vip': 10,
-      'gemini-3-Flash-image-preview': 11,
-      // 视频生成模型
-      'grs-sora-2': 1,
-      // 工具模型
-      'smart_split': 1,
-      'longcat_upscale': 2,
-    };
+    // #277 修复：移除硬编码排序，使用数据库 sort_order 字段
+    // 如果 sort_order 相同，则按 model_id 字母顺序排序
     const allModels = [...modelsWithEndpoint].sort((a, b) => {
-      return (MODEL_SORT_ORDER[a.model_id] ?? 999) - (MODEL_SORT_ORDER[b.model_id] ?? 999);
+      const orderA = a.sort_order ?? 999;
+      const orderB = b.sort_order ?? 999;
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+      // sort_order 相同时，按 model_id 排序（保证稳定）
+      return (a.model_id || '').localeCompare(b.model_id || '');
     });
 
     // 🔧 重构：直接使用数据库 is_visible 和 is_active 字段过滤

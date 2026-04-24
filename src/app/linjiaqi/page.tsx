@@ -217,6 +217,7 @@ interface User {
   phone: string;
   email?: string;               // 邮箱（可选）
   credits: number;              // 普通积分
+  supplierCredits?: number;     // #291 供应商积分（管理员专用）
   avatar?: string;              // 头像URL
   isAdmin?: boolean;            // 是否为管理员
   is_active: boolean;
@@ -1171,7 +1172,7 @@ export default function AdminDashboard() {
     try {
       const params = new URLSearchParams();
       params.set('user_id', userId);
-      params.set('page_size', '20'); // 只显示最近20条
+      params.set('page_size', '50'); // 显示最近50条
       
       const res = await fetch(`/api/linjiaqi/credit-logs?${params.toString()}`, { credentials: 'include' });
       const data = await res.json();
@@ -4155,13 +4156,13 @@ export default function AdminDashboard() {
 
         {/* 用户详情对话框 */}
         <Dialog open={showUserDialog} onOpenChange={setShowUserDialog}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>用户详情</DialogTitle>
             </DialogHeader>
             {selectedUser && (
               <div className="space-y-6">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div>
                     <Label className="text-gray-500">用户名</Label>
                     <p className="text-lg font-semibold">{selectedUser.nickname || '-'}</p>
@@ -4179,6 +4180,9 @@ export default function AdminDashboard() {
                     <p className="text-lg font-semibold flex items-center gap-2">
                       <Coins className="h-5 w-5 text-yellow-500" />
                       {selectedUser.credits}
+                      {selectedUser.supplierCredits !== undefined && (
+                        <span className="text-sm text-gray-500">(供应商: {selectedUser.supplierCredits})</span>
+                      )}
                     </p>
                   </div>
                   <div>
@@ -4189,110 +4193,19 @@ export default function AdminDashboard() {
                       </Badge>
                     </p>
                   </div>
-                  <div className="col-span-2">
-                    <Label className="text-gray-500">用户ID</Label>
-                    <p className="text-sm font-mono">{selectedUser.id}</p>
-                  </div>
                   <div>
                     <Label className="text-gray-500">创建时间</Label>
                     <p className="text-sm">{formatDate(selectedUser.created_at)}</p>
                   </div>
+                  <div className="col-span-3">
+                    <Label className="text-gray-500">用户ID</Label>
+                    <p className="text-sm font-mono">{selectedUser.id}</p>
+                  </div>
                 </div>
 
                 <Separator />
 
-                <div>
-                  <h3 className="text-lg font-semibold mb-3">充值记录</h3>
-                  {selectedUser.rechargeRecords && selectedUser.rechargeRecords.length > 0 ? (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>金额</TableHead>
-                          <TableHead>获得积分</TableHead>
-                          <TableHead>支付方式</TableHead>
-                          <TableHead>时间</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {selectedUser.rechargeRecords.map((record) => (
-                          <TableRow key={record.id}>
-                            <TableCell className="text-green-600">¥{(record.amount / 100).toFixed(2)}</TableCell>
-                            <TableCell>+{record.points}</TableCell>
-                            <TableCell>
-                              {record.payment_method === 'alipay' ? '支付宝' : 
-                               record.payment_method === 'wechat' ? '微信' : '银行卡'}
-                            </TableCell>
-                            <TableCell>{formatDate(record.created_at)}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  ) : (
-                    <p className="text-gray-500">暂无充值记录</p>
-                  )}
-                </div>
-
-                <Separator />
-
-                <div>
-                  <h3 className="text-lg font-semibold mb-3">兑换记录</h3>
-                  {selectedUser.exchangeRecords && selectedUser.exchangeRecords.length > 0 ? (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>兑换物品</TableHead>
-                          <TableHead>消耗积分</TableHead>
-                          <TableHead>时间</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {selectedUser.exchangeRecords.map((record) => (
-                          <TableRow key={record.id}>
-                            <TableCell>{record.item_name}</TableCell>
-                            <TableCell className="text-red-600">-{record.points_used}</TableCell>
-                            <TableCell>{formatDate(record.created_at)}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  ) : (
-                    <p className="text-gray-500">暂无兑换记录</p>
-                  )}
-                </div>
-
-                <Separator />
-
-                <div>
-                  <h3 className="text-lg font-semibold mb-3">积分使用记录</h3>
-                  {selectedUser.pointUsageRecords && selectedUser.pointUsageRecords.length > 0 ? (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>模型</TableHead>
-                          <TableHead>使用积分</TableHead>
-                          <TableHead>描述</TableHead>
-                          <TableHead>时间</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {selectedUser.pointUsageRecords.map((record) => (
-                          <TableRow key={record.id}>
-                            <TableCell>{record.model_name}</TableCell>
-                            <TableCell className="text-red-600">-{record.points_used}</TableCell>
-                            <TableCell>{record.description || '-'}</TableCell>
-                            <TableCell>{formatDate(record.created_at)}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  ) : (
-                    <p className="text-gray-500">暂无使用记录</p>
-                  )}
-                </div>
-
-                <Separator />
-
-                {/* #291 积分流水记录 */}
+                {/* #291 统一展示积分流水（包含所有类型的积分变动） */}
                 <div>
                   <h3 className="text-lg font-semibold mb-3">积分流水</h3>
                   {selectedUserCreditLogs.length > 0 ? (
@@ -4302,6 +4215,7 @@ export default function AdminDashboard() {
                           <TableHead>变动金额</TableHead>
                           <TableHead>变动后余额</TableHead>
                           <TableHead>类型</TableHead>
+                          <TableHead>来源</TableHead>
                           <TableHead>描述</TableHead>
                           <TableHead>时间</TableHead>
                         </TableRow>
@@ -4323,17 +4237,25 @@ export default function AdminDashboard() {
                                 log.type === 'refund' ? 'default' :
                                 log.type === 'recharge' ? 'default' :
                                 log.type === 'admin_adjust' ? 'secondary' :
+                                log.type === 'exchange' ? 'outline' :
+                                log.type === 'redeem' ? 'outline' :
                                 'outline'
                               }>
                                 {log.type === 'generate' || log.type === 'deduct' ? '生成扣费' :
                                  log.type === 'refund' ? '积分返还' :
-                                 log.type === 'recharge' ? '卡密充值' :
-                                 log.type === 'admin_adjust' ? '后台调整' :
+                                 log.type === 'recharge' ? '充值' :
+                                 log.type === 'admin_adjust' ? (log.amount > 0 ? '手动添加' : '手动减少') :
                                  log.type === 'exchange' ? '积分兑换' :
+                                 log.type === 'redeem' ? '兑换码兑换' :
                                  log.type}
                               </Badge>
                             </TableCell>
-                            <TableCell className="max-w-[200px] truncate" title={log.description}>
+                            <TableCell>
+                              {log.payment_method === 'alipay' ? '支付宝' :
+                               log.payment_method === 'wechat' ? '微信' :
+                               log.payment_method || '-'}
+                            </TableCell>
+                            <TableCell className="max-w-[250px] truncate" title={log.description}>
                               {log.description || '-'}
                             </TableCell>
                             <TableCell className="text-sm text-gray-500">

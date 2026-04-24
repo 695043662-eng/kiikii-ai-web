@@ -317,17 +317,23 @@ export function AIGeneratorProvider({ children }: { children: React.ReactNode })
     refreshUserInfo();
   }, [refreshUserInfo]);
   
-  // 监听全局积分变化事件
+  // #269 监听全局积分变化事件
+  // 注意：大多数触发源（生图完成、充值成功）已经调用过 refreshUserInfo
+  // 这里只需要更新缓存，不需要再发起 API 请求
+  // 只有管理后台调整积分这种"外部"变化才需要刷新，但管理后台自己会调用 refreshUserInfo
   useEffect(() => {
-    const handleCreditsChanged = () => {
-      console.log('[AIGeneratorContext] 收到积分变化事件，清除缓存并刷新');
-      // 🔒 军规：事件触发时也必须清除缓存，确保获取最新数据
-      clearCachedUser();
-      refreshUserInfo();
+    const handleCreditsChanged = (event: CustomEvent) => {
+      const source = event.detail?.source;
+      console.log('[AIGeneratorContext] 收到积分变化事件，来源:', source || 'unknown');
+      // 只在来自管理后台的事件时刷新（管理后台调整积分）
+      if (source === 'admin') {
+        clearCachedUser();
+        refreshUserInfo();
+      }
     };
     
-    window.addEventListener('creditsChanged', handleCreditsChanged);
-    return () => window.removeEventListener('creditsChanged', handleCreditsChanged);
+    window.addEventListener('creditsChanged', handleCreditsChanged as EventListener);
+    return () => window.removeEventListener('creditsChanged', handleCreditsChanged as EventListener);
   }, [refreshUserInfo]);
 
   // 🔧 监听登录成功事件
@@ -526,7 +532,8 @@ export function AIGeneratorProvider({ children }: { children: React.ReactNode })
             setCredits(genResult.creditsBalance);
             // 🔥 同步更新缓存，避免刷新后回退
             updateCachedCredits(genResult.creditsBalance);
-            // #269 新增：触发全局积分变化事件，通知管理后台等
+            // #269 触发事件通知其他组件（如 Navbar）
+            // 注意：AIGeneratorContext 的事件监听会跳过自己触发的刷新（见下方监听逻辑）
             window.dispatchEvent(new CustomEvent('creditsChanged'));
           } else {
             // ⚠️ 如果 SSE 没返回余额，查询最新余额

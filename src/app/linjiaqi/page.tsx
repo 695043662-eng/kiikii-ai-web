@@ -1638,8 +1638,8 @@ export default function AdminDashboard() {
         if (data.success) {
           // 刷新 admin 状态（供应配额相关）
           fetchAdminInfo();
-          // #269 新增：触发全局积分变化事件
-          window.dispatchEvent(new CustomEvent('creditsChanged'));
+          // #269 新增：触发全局积分变化事件，带来源标识
+          window.dispatchEvent(new CustomEvent('creditsChanged', { detail: { source: 'admin' } }));
           toast.success(`成功划扣 ${amount} 配额`);
         } else {
           // 恢复用户积分
@@ -1662,8 +1662,8 @@ export default function AdminDashboard() {
         });
         const data = await res.json();
         if (data.success) {
-          // #269 新增：触发全局积分变化事件，通知前端其他页面
-          window.dispatchEvent(new CustomEvent('creditsChanged'));
+          // #269 新增：触发全局积分变化事件，带来源标识
+          window.dispatchEvent(new CustomEvent('creditsChanged', { detail: { source: 'admin' } }));
           toast.success(operation === 'add' 
             ? `成功增加 ${amount} 积分给用户` 
             : `成功扣减 ${amount} 积分`);

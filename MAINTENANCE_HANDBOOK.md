@@ -14,6 +14,40 @@
 
 ---
 
+## ⛔⛔⛔ 数据库铁律（CRITICAL）⛔⛔⛔
+
+> **#235 血泪教训：禁止使用 `exec_sql` 工具！禁止连接沙盒数据库！**
+
+### 数据库配置（必须背诵）
+
+| 环境 | URL | 用途 | 状态 |
+|------|-----|------|------|
+| **开发数据库** | `ozdlvxxoufkiazddvxys.supabase.co` | 开发调试 | ✅ 正在使用 |
+| **生产数据库** | `hrwoalchynrnwlcqdpxn.supabase.co` | 线上服务 | ✅ 正在使用 |
+| **沙盒数据库** | `br-jolly-chub-94e68322...` | 已废弃 | ❌ **禁止使用** |
+
+### 禁令
+
+| 禁止项 | 说明 |
+|--------|------|
+| `exec_sql` 工具 | 默认连接沙盒数据库，返回假数据！ |
+| 沙盒数据库 URL/Key | 已废弃，任何代码中不得出现 |
+| 硬编码数据库连接 | 必须从环境变量读取 |
+
+### 正确查询数据库方式
+
+```javascript
+// ✅ 正确：使用 Node.js 脚本直连真实数据库
+const { getSupabaseClient } = await import('./src/storage/database/supabase-client.ts');
+const supabase = getSupabaseClient();
+const { data } = await supabase.from('users').select('*');
+
+// ❌ 错误：使用 exec_sql 工具（连接沙盒数据库）
+exec_sql({ sql: "SELECT * FROM users" })
+```
+
+---
+
 ## 维修记录目录
 
 | 编号 | 问题类型 | 关键词 | 状态 | 备注 |

@@ -124,6 +124,7 @@
 | #263 | webhook URL 硬编码开发环境域名 | 数据库占位符 + 环境变量动态读取 | ✅ 已修复 | 核心必读 |
 | #264 | gpt-image-2 模型 Logo 显示 | 添加专用 logo 文件 + 按模型 ID 判断显示 | ✅ 已修复 | |
 | #265 | 模型 Logo 替换为 Gemini/GPT 专用图标 | 替换文件，尺寸统一 150×150 | ✅ 已修复 | |
+| #266 | 管理后台拖动排序不影响前端显示 | syncToApiModels 函数添加 sort_order 同步 | ✅ 已修复 | |
 
 ---
 
@@ -3219,6 +3220,73 @@ if (existingMd5s.includes(result.md5)) {
   - 第 972-985 行：添加 `terminalTaskId` 检测分支
 - 数据库 `api_configs` 表 id=7
   - `request_body_template.webHook` 字段
+
+**状态**：✅ 已修复
+
+---
+
+### #265 - 模型 Logo 替换为 Gemini/GPT 专用图标
+
+**问题描述**：
+- gpt-image-2 模型需要专用的 GPT logo
+- Banana 系列模型需要使用 Gemini logo
+
+**修复方案**：
+1. 替换 `public/model-logo.png` 为 Gemini 图标
+2. 替换 `public/gpt-image-2-logo.png` 为 GPT 图标
+3. 代码中根据 modelId 判断显示对应 logo
+
+**修改文件**：
+- `public/model-logo.png`
+- `public/gpt-image-2-logo.png`
+- `src/app/generate/page.tsx`
+- `src/components/temp_RightPanel.tsx`
+
+**状态**：✅ 已修复
+
+---
+
+### #266 - 管理后台拖动排序不影响前端显示
+
+**问题描述**：
+- 管理后台积分配置拖动排序后，前端模型选择栏排序不变
+- 管理后台使用 `model_credits_config` 表，前端读取 `api_models` 表
+- 两个表都有 `sort_order` 字段，但 `syncToApiModels` 函数没有同步
+
+**根因分析**：
+`syncToApiModels` 函数在更新 `api_models` 时，没有传入 `sort_order` 字段
+
+**修复方案**：
+1. 在 `syncToApiModels` 函数参数中添加 `sortOrder`
+2. 在 insert 和 update 操作中同步 `sort_order` 字段
+3. 在调用 `syncToApiModels` 时传入 `sort_order`
+
+**代码修改**：
+```typescript
+// 函数签名添加参数
+async function syncToApiModels(
+  // ...原有参数
+  sortOrder?: number  // #266 新增
+) {
+  // insert 时使用
+  sort_order: sortOrder ?? 100,
+  
+  // update 时同步
+  if (sortOrder !== undefined) {
+    updateData.sort_order = sortOrder;
+  }
+}
+
+// 调用时传入 sort_order
+await syncToApiModels(
+  client, model_key, model_name, credits, description, is_active,
+  'update', undefined, data,
+  sort_order  // #266 同步排序
+);
+```
+
+**修改文件**：
+- `src/app/api/linjiaqi/model-credits/route.ts`
 
 **状态**：✅ 已修复
 

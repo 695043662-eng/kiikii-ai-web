@@ -110,6 +110,7 @@ function inferParameters(credits: number, modelType: string, config?: any, model
 /**
  * 同步到 api_models 表
  * #208 修复：保留数据库中已有的 resolutions，不覆盖自定义积分
+ * #266 修复：同步 sort_order 到 api_models 表
  */
 async function syncToApiModels(
   supabase: any,
@@ -120,7 +121,8 @@ async function syncToApiModels(
   isActive: boolean,
   operation: 'insert' | 'update' | 'delete',
   existingId?: number,
-  config?: any
+  config?: any,
+  sortOrder?: number  // #266 新增：排序字段
 ) {
   const { type, configId } = inferModelType(modelKey);
   
@@ -166,32 +168,39 @@ async function syncToApiModels(
           parameters: parameters,
           credits_base: credits,
           is_active: isActive,
-          sort_order: 100, // 默认排序
+          sort_order: sortOrder ?? 100, // #266 使用传入的排序值
         });
       
       if (error) {
         console.error(`[Sync] 新增 api_models 失败:`, error);
       } else {
-        console.log(`[Sync] 新增 api_models: ${modelKey} (config_id: ${configId})`);
+        console.log(`[Sync] 新增 api_models: ${modelKey} (config_id: ${configId}, sort_order: ${sortOrder ?? 100})`);
       }
     } else if (operation === 'update' && existing) {
       // 更新 - #208 注意：不更新 parameters，保留自定义积分
+      const updateData: Record<string, any> = {
+        model_name: modelName,
+        description: description || '',
+        // #208 不更新 parameters，保留自定义积分
+        // parameters: parameters,
+        credits_base: credits,
+        is_active: isActive,
+      };
+      
+      // #266 只有传入 sortOrder 时才更新 sort_order
+      if (sortOrder !== undefined) {
+        updateData.sort_order = sortOrder;
+      }
+      
       const { error } = await supabase
         .from('api_models')
-        .update({
-          model_name: modelName,
-          description: description || '',
-          // #208 不更新 parameters，保留自定义积分
-          // parameters: parameters,
-          credits_base: credits,
-          is_active: isActive,
-        })
+        .update(updateData)
         .eq('model_id', modelKey);
       
       if (error) {
         console.error(`[Sync] 更新 api_models 失败:`, error);
       } else {
-        console.log(`[Sync] 更新 api_models: ${modelKey} (保留原有 parameters)`);
+        console.log(`[Sync] 更新 api_models: ${modelKey} (保留原有 parameters, sort_order: ${sortOrder})`);
       }
     }
   } catch (error) {
@@ -331,7 +340,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 实时同步到 api_models 表
-    await syncToApiModels(client, modelKey, modelName, credits, description, true, 'insert', undefined, data);
+    await syncToApiModels(client, modelKey, modelName, credits, description, true, 'insert', undefined, data, undefined);
 
     return NextResponse.json({ success: true, data });
   } catch (error) {
@@ -417,7 +426,8 @@ export async function PUT(request: NextRequest) {
       is_active !== undefined ? is_active : data.is_active,
       'update',
       undefined,
-      data // 传入完整配置对象
+      data, // 传入完整配置对象
+      sort_order !== undefined ? sort_order : data.sort_order  // #266 同步排序
     );
 
     return NextResponse.json({ success: true, data });
@@ -476,7 +486,7 @@ export async function DELETE(request: NextRequest) {
 
     // 实时同步删除 api_models 表
     if (existing) {
-      await syncToApiModels(client, existing.model_key, '', 0, '', false, 'delete');
+      await syncToApiModels(client, existing.model_key, '', 0, '', false, 'delete', undefined, undefined, undefined);
     }
 
     return NextResponse.json({ success: true });

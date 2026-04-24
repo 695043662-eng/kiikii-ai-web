@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
             return;
           }
           
-          const signedUrl = await getSignedUrl(key, 432000); // 5天有效期
+          const signedUrl = await getSignedUrl(key, 3600); // 1小时有效期（COS 可能不支持 5 天）
           results[key] = signedUrl;
         } catch (err) {
           console.error('[signed-url] 获取签名 URL 失败:', key, err);

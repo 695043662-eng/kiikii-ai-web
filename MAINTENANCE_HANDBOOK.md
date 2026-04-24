@@ -120,6 +120,7 @@
 | #259 | 展示/启用按钮失效 | 废除 hidden-models.json，全线回归数据库管理 | ✅ 已修复 | 核心必读 |
 | #260 | 新架构请求失败 "apikey is empty" | request_headers 缺少 Authorization header | ✅ 已修复 | 核心必读 |
 | #261 | gpt-image-2 返回结果为空 | 配置webhook+修改空结果检测逻辑 | ✅ 已修复 | 核心必读 |
+| #262 | 图片签名 URL 返回 403 | COS 客户端初始化时机问题 | ✅ 已修复 | 核心必读 |
 
 ---
 

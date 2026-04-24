@@ -25,6 +25,7 @@ console.log('[COS] 配置信息:', {
   Region: COS_CONFIG.Region,
   Domain: COS_CONFIG.Domain,
   SecretId: COS_CONFIG.SecretId ? `${COS_CONFIG.SecretId.substring(0, 8)}...` : '未配置',
+  SecretKey: COS_CONFIG.SecretKey ? `${COS_CONFIG.SecretKey.substring(0, 4)}***` : '❌ 未配置',
   ENV_PREFIX,
 });
 
@@ -40,13 +41,28 @@ export function isCOSConfigured(): boolean {
 
 // 创建 COS 客户端实例
 let cosClient: COS | null = null;
+let lastSecretKey: string = '';
 
 export function getCOSClient(): COS {
-  if (!cosClient) {
+  // #261 修复：每次都检查 SecretKey 是否变化，避免使用旧的空配置客户端
+  const currentSecretKey = process.env.COS_SECRET_KEY || '';
+  
+  if (!cosClient || lastSecretKey !== currentSecretKey) {
+    console.log('[COS] 创建新的 COS 客户端');
+    console.log('[COS] SecretKey 来源:', currentSecretKey ? `process.env (${currentSecretKey.substring(0, 4)}***)` : '空');
+    
+    // 更新 COS_CONFIG（以防环境变量后来加载）
+    COS_CONFIG.SecretId = process.env.COS_SECRET_ID || '';
+    COS_CONFIG.SecretKey = currentSecretKey;
+    COS_CONFIG.Bucket = process.env.COS_BUCKET || '';
+    COS_CONFIG.Region = process.env.COS_REGION || 'ap-hongkong';
+    COS_CONFIG.Domain = process.env.COS_DOMAIN || '';
+    
     cosClient = new COS({
       SecretId: COS_CONFIG.SecretId,
       SecretKey: COS_CONFIG.SecretKey,
     });
+    lastSecretKey = currentSecretKey;
   }
   return cosClient;
 }

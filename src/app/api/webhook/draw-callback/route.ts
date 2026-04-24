@@ -144,12 +144,16 @@ async function downloadAndUploadToCOS(imageUrl: string, index: number): Promise<
     const buffer = Buffer.from(arrayBuffer);
     
     const key = `generated-images/${Date.now()}-${index}-${Math.random().toString(36).slice(2, 6)}.png`;
-    await uploadToCOS(key, buffer, 'image/png');
     
-    const signedUrl = await getSignedUrl(key, 432000);
+    // #261 修复：uploadToCOS 会自动添加环境前缀（dev/ 或 prod/）
+    // 返回的 result.key 是带前缀的完整路径
+    const result = await uploadToCOS(key, buffer, 'image/png');
     
-    console.log(`[Webhook] 图片 ${index + 1} 上传成功，key: ${key}`);
-    return { key, signedUrl };
+    // 使用返回的带前缀的 key 获取签名 URL（1小时有效期）
+    const signedUrl = await getSignedUrl(result.key, 3600);
+    
+    console.log(`[Webhook] 图片 ${index + 1} 上传成功，key: ${result.key}`);
+    return { key: result.key, signedUrl };
   } catch (error: any) {
     console.error(`[Webhook] 下载图片 ${index + 1} 失败:`, error.message);
     throw error;

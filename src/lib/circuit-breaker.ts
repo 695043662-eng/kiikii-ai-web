@@ -171,7 +171,7 @@ export const defaultCircuitBreaker = new CircuitBreaker({
 
 // SSE 流专用熔断器（长超时，适用于图片生成等长时间任务）
 export const sseCircuitBreaker = new CircuitBreaker({
-  failureThreshold: 5,
+  failureThreshold: 10,      // #281 修复：提高到 10 次，避免频繁熔断
   successThreshold: 3,
   resetTimeout: 120000,  // 2 分钟
   timeout: 360000,       // 6 分钟（支持长时间 SSE 流）

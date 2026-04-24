@@ -5204,40 +5204,33 @@ useEffect(() => {
 ```
 
 **修复方案**：
-检测元素数量减少（删除操作）时，立即保存，不等待防抖。
+在 `deleteElement` 和 `deleteSelected` 函数中显式调用 `saveStateToStorage`，删除后立即保存。
 
 ```typescript
-// #289 修复：跟踪上一次元素数量
-const prevElementsCountRef = useRef(state.elements.length);
+// #289 修复：删除后立即保存，防止刷新后恢复
+const deleteElement = useCallback((id: string) => {
+  dispatch({ type: 'DELETE_ELEMENTS', payload: [id] });
+  saveHistory();
+  // 立即保存到 localStorage
+  saveStateToStorage(stateRef.current, false);
+  console.log('[Canvas] #289 删除元素后立即保存');
+}, [saveHistory]);
 
-useEffect(() => {
-  // ... 其他检查 ...
-  
-  // #289 修复：检测元素是否减少（删除操作），立即保存
-  const currentCount = state.elements.length;
-  const prevCount = prevElementsCountRef.current;
-  const isElementDeleted = currentCount < prevCount;
-  prevElementsCountRef.current = currentCount;
-  
-  if (isElementDeleted) {
-    // 删除操作，立即保存
-    console.log('[Canvas] #289 检测到元素删除，立即保存到 localStorage');
-    saveStateToStorage(state, false);
-    return;
+const deleteSelected = useCallback(() => {
+  if (state.selectedIds.length > 0) {
+    dispatch({ type: 'DELETE_ELEMENTS', payload: state.selectedIds });
+    saveHistory();
+    // 立即保存到 localStorage
+    saveStateToStorage(stateRef.current, false);
+    console.log('[Canvas] #289 删除选中元素后立即保存');
   }
-  
-  // 其他操作，防抖保存
-  const timer = setTimeout(() => {
-    saveStateToStorage(state, isRestoring);
-  }, 1000);
-  return () => clearTimeout(timer);
-}, [state.elements, state.annotations, isRestoring]);
+}, [state.selectedIds, saveHistory]);
 ```
 
 **修改文件**：
 - `src/contexts/CanvasContext.tsx`
-  - 添加 `prevElementsCountRef` 跟踪元素数量
-  - 在 useEffect 中检测元素数量减少，立即保存
+  - deleteElement 函数添加立即保存
+  - deleteSelected 函数添加立即保存
 
 **验证方法**：
 1. 在画布中上传或生成图片

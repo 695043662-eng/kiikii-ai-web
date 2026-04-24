@@ -72,9 +72,11 @@ export async function GET(request: NextRequest) {
       .eq('phone', ADMIN_PHONE)
       .single();
 
+    if (error) {
+      console.error('[admin/credits] 查询失败:', error);
+    }
     console.log('[admin/credits] 查询结果:', { 
-      adminUser: adminUser ? { id: adminUser.id, phone: adminUser.phone, credits: adminUser.credits } : null, 
-      error 
+      adminUser: adminUser ? { id: adminUser.id, phone: adminUser.phone, credits: adminUser.credits } : null
     });
 
     if (error || !adminUser) {

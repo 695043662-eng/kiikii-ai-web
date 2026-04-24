@@ -175,6 +175,7 @@ exec_sql({ sql: "SELECT * FROM users" })
 | #280 | 再次生成积分不实时更新 | 复用 handleGenerate 统一入口 | ✅ 已修复 | 核心必读 |
 | #281 | 熔断器阈值太低 | failureThreshold: 5 → 10 | ✅ 已修复 | 核心必读 |
 | #282 | 积分返还逻辑分散导致漏返 | 统一 handlePartialRefund 函数 | ✅ 已修复 | **核心必读** |
+| #283 | Webhook积分返还未await | 改为await等待返还完成 | ✅ 已修复 | **核心必读** |
 
 ---
 

@@ -486,21 +486,24 @@ export async function POST(request: NextRequest) {
             const creditsPerImage = mappingResult.requestParams?.creditsPerImage || 0;
             const generationCount = mappingResult.requestParams?.generationCount || imageItems.length;
             
-            // 使用统一的返还函数
-            handlePartialRefund(
-              getTaskResult,
-              setTaskResult,
-              mainTaskId,
-              imageItems,
-              generationCount,
-              creditsPerImage,
-              mappingResult.userId,
-              `Webhook回调：部分图片失败`
-            ).then(result => {
-              if (result.success) {
-                console.log(`[积分补偿] #282 Webhook退还成功，剩余 ${result.newBalance} 积分`);
+            // #283 修复：必须使用 await 等待返还完成
+            try {
+              const refundResult = await handlePartialRefund(
+                getTaskResult,
+                setTaskResult,
+                mainTaskId,
+                imageItems,
+                generationCount,
+                creditsPerImage,
+                mappingResult.userId,
+                `Webhook回调：部分图片失败`
+              );
+              if (refundResult.success) {
+                console.log(`[积分补偿] #282 Webhook退还成功，剩余 ${refundResult.newBalance} 积分`);
               }
-            }).catch(err => console.error(`[积分补偿] #282 Webhook退还异常:`, err));
+            } catch (err) {
+              console.error(`[积分补偿] #282 Webhook退还异常:`, err);
+            }
           }
         }
       } else {

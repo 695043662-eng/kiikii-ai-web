@@ -122,6 +122,7 @@
 | #261 | gpt-image-2 返回结果为空 | 配置webhook+修改空结果检测逻辑 | ✅ 已修复 | 核心必读 |
 | #262 | 图片签名 URL 返回 403 | COS 客户端初始化时机问题 | ✅ 已修复 | 核心必读 |
 | #263 | webhook URL 硬编码开发环境域名 | 数据库占位符 + 环境变量动态读取 | ✅ 已修复 | 核心必读 |
+| #264 | gpt-image-2 模型 Logo 显示 | 添加专用 logo 文件 + 按模型 ID 判断显示 | ✅ 已修复 | |
 
 ---
 
@@ -3217,6 +3218,29 @@ if (existingMd5s.includes(result.md5)) {
   - 第 972-985 行：添加 `terminalTaskId` 检测分支
 - 数据库 `api_configs` 表 id=7
   - `request_body_template.webHook` 字段
+
+**状态**：✅ 已修复
+
+---
+
+### #264 - gpt-image-2 模型 Logo 显示
+
+**问题描述**：
+- gpt-image-2 模型在模型选择栏中显示的是默认的通用 logo
+- 需要为 gpt-image-2 模型设置专用的 logo 图片
+
+**修复方案**：
+1. 添加专用 logo 文件：`/public/gpt-image-2-logo.png`
+2. 在模型选择栏代码中根据 modelId 判断显示对应 logo：
+   ```typescript
+   const modelLogo = modelId === 'gpt-image-2' ? '/gpt-image-2-logo.png' : '/model-logo.png';
+   <img src={modelLogo} alt="" className="w-10 h-10 rounded-lg" />
+   ```
+
+**修改文件**：
+- 新增 `public/gpt-image-2-logo.png`
+- `src/app/generate/page.tsx` 模型选择栏（3处）
+- `src/components/temp_RightPanel.tsx` 模型选择栏（3处）
 
 **状态**：✅ 已修复
 

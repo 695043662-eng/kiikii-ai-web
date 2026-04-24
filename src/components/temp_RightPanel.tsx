@@ -894,6 +894,8 @@ const RightPanel: React.FC<RightPanelProps> = (props) => {
                 const config = modelConfig[modelId];
                 const isSelected = selectedModel === modelId;
                 const isActive = modelActiveStatus[modelId] !== false;
+                // 🔧 #264 根据模型获取对应的 logo
+                const modelLogo = modelId === 'gpt-image-2' ? '/gpt-image-2-logo.png' : '/model-logo.png';
                 
                 if (!config) {
                   return (
@@ -901,7 +903,7 @@ const RightPanel: React.FC<RightPanelProps> = (props) => {
                       key={modelId}
                       className="flex items-center gap-3 p-3 rounded-lg cursor-not-allowed opacity-50"
                     >
-                      <img src="/model-logo.png" alt="" className="w-10 h-10 rounded-lg" />
+                      <img src={modelLogo} alt="" className="w-10 h-10 rounded-lg" />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium text-gray-900 dark:text-white">{modelDisplayNames[modelId] || formatModelName(modelId)}</span>
@@ -918,7 +920,7 @@ const RightPanel: React.FC<RightPanelProps> = (props) => {
                       key={modelId}
                       className="flex items-center gap-3 p-3 rounded-lg cursor-not-allowed opacity-60"
                     >
-                      <img src="/model-logo.png" alt="" className="w-10 h-10 rounded-lg grayscale" />
+                      <img src={modelLogo} alt="" className="w-10 h-10 rounded-lg grayscale" />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium text-gray-400 dark:text-gray-500">{modelDisplayNames[modelId] || formatModelName(modelId)}</span>
@@ -949,7 +951,7 @@ const RightPanel: React.FC<RightPanelProps> = (props) => {
                       isSelected ? 'bg-gray-100 dark:bg-gray-700' : 'hover:bg-gray-50 dark:hover:bg-gray-700'
                     }`}
                   >
-                    <img src="/model-logo.png" alt="" className="w-10 h-10 rounded-lg" />
+                    <img src={modelLogo} alt="" className="w-10 h-10 rounded-lg" />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium text-gray-900 dark:text-white">{modelDisplayNames[modelId] || formatModelName(modelId)}</span>

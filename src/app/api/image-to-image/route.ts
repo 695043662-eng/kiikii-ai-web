@@ -872,7 +872,14 @@ export async function POST(request: NextRequest) {
         };
 
         // 发送开始事件
-        sendEvent({ type: 'start', count: generationCount, taskId: actualTaskId });
+        // #270 新增：携带扣费后的积分信息，让前端立即显示积分变化
+        sendEvent({ 
+          type: 'start', 
+          count: generationCount, 
+          taskId: actualTaskId,
+          creditsCharged: totalCredits > 0 ? totalCredits : undefined,
+          creditsBalance: creditsBalanceAfterDeduct ?? undefined,
+        });
 
         // 串行提交：3秒1个，逐个发给供应商，避免触发流量清洗
         const imageUrls: (string | null)[] = new Array(generationCount).fill(null);

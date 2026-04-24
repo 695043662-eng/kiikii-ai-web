@@ -568,11 +568,16 @@ export default function SingleGeneratePage() {
     ctxSetCredits(newCredits);
     // 同步更新用户缓存
     updateCachedCredits(newCredits);
-    // 触发全局事件，通知其他组件刷新（Context 会自动处理）
+    // #270 触发全局事件，携带 userId 实现本地热更新
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('creditsChanged'));
+      window.dispatchEvent(new CustomEvent('creditsChanged', {
+        detail: {
+          userId: ctxUserId,
+          newCredits: newCredits,
+        }
+      }));
     }
-  }, [ctxSetCredits]);
+  }, [ctxSetCredits, ctxUserId]);
   
   // 【积分管理已由 AIGeneratorContext 统一处理，以下逻辑可删除】
   // 页面加载时获取用户积分

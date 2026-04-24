@@ -47,14 +47,6 @@ const createUserStore = () => {
 
 const userStore = createUserStore();
 
-// 触发积分更新的全局函数
-if (typeof window !== 'undefined') {
-  (window as any).refreshUserCredits = () => {
-    // 触发自定义事件
-    window.dispatchEvent(new CustomEvent('creditsChanged'));
-  };
-}
-
 export default function Navbar({
   isLoggedIn,
   setIsLoggedIn,
@@ -102,16 +94,28 @@ export default function Navbar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);  // 空依赖，只在组件挂载时执行一次
 
-  // 监听积分变化事件
+  // #270 监听积分变化事件（本地热更新，0 API 请求）
   useEffect(() => {
-    const handleCreditsChange = () => {
-      console.log('收到积分变化事件，重新获取用户信息');
-      fetchUserInfo();
+    const handleCreditsChange = (event: Event) => {
+      const customEvent = event as CustomEvent<{ userId?: string; newCredits?: number }>;
+      const { userId, newCredits } = customEvent.detail || {};
+      
+      // 严格校验：必须是当前登录用户的积分变化
+      if (userId && newCredits !== undefined && user && user.id === userId) {
+        console.log(`[Navbar] #270 本地热更新积分: ${user.credits} → ${newCredits}`);
+        const updatedUser = { ...user, credits: newCredits };
+        setUser(updatedUser);
+        userStore.setCredits(newCredits);
+      } else if (!userId || !user) {
+        // 兜底：如果没有 userId 或 user 信息，仍调用 API（兼容旧事件）
+        console.log('[Navbar] 积分变化事件无 userId，回退到 API 刷新');
+        fetchUserInfo();
+      }
     };
 
     window.addEventListener('creditsChanged', handleCreditsChange);
     return () => window.removeEventListener('creditsChanged', handleCreditsChange);
-  }, [fetchUserInfo]);
+  }, [fetchUserInfo, user]);
 
   const navItems = [
     { name: '首页', href: '/', active: pathname === '/' },

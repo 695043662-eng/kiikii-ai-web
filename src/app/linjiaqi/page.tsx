@@ -605,46 +605,49 @@ export default function AdminDashboard() {
   }, [redeemChannelFilter, redeemStatusFilter, currentUser]);
 
   // 🔧 #121 焦点回刷 + 30秒静默轮询（管理后台积分动态化）
-  // 🔧 #269 新增：监听 creditsChanged 事件，实现方案A（每次操作后刷新）
+  // 🔧 #270 新增：监听 creditsChanged 事件，本地热更新用户积分（0 API 请求）
   useEffect(() => {
     if (!currentUser) return;
-
-    // 刷新用户列表积分（轻量级，只获取用户列表）
-    const fetchUsersCredits = async () => {
-      try {
-        const res = await fetch('/api/users', { credentials: 'include' });
-        const data = await res.json();
-        if (data.data) {
-          setUsers(data.data);
-        }
-      } catch (error) {
-        console.error('[管理后台] 刷新用户积分失败:', error);
-      }
-    };
 
     // 1. 焦点回刷：切换回管理后台标签页时自动刷新
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         console.log('[管理后台] 焦点回刷：刷新积分数据');
         fetchAdminInfo();
-        fetchUsersCredits();
+        // 焦点回刷时仍调用 API（用户可能长时间离开，需要获取最新数据）
+        fetch('/api/users', { credentials: 'include' })
+          .then(res => res.json())
+          .then(data => data.data && setUsers(data.data))
+          .catch(err => console.error('[管理后台] 刷新用户列表失败:', err));
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // 2. 静默轮询：30秒一次（作为兜底，主要依赖事件监听）
+    // 2. 静默轮询：30秒一次（作为兜底）
     const pollInterval = setInterval(() => {
       console.log('[管理后台] 静默轮询：刷新积分数据');
       fetchAdminInfo();
-      fetchUsersCredits();
     }, 30000);
 
-    // 3. #269 新增：监听全局积分变化事件（方案A核心）
-    // 前端生图成功/失败、充值成功等场景都会触发此事件
-    const handleCreditsChanged = () => {
-      console.log('[管理后台] 收到积分变化事件：立即刷新');
-      fetchAdminInfo();
-      fetchUsersCredits();
+    // 3. #270 监听全局积分变化事件（本地热更新，0 API 请求）
+    const handleCreditsChanged = (event: Event) => {
+      const customEvent = event as CustomEvent<{ userId?: string; newCredits?: number }>;
+      const { userId, newCredits } = customEvent.detail || {};
+      
+      if (userId && newCredits !== undefined) {
+        console.log(`[管理后台] #270 本地热更新用户积分: userId=${userId}, newCredits=${newCredits}`);
+        // 遍历 users 数组，精准替换对应用户的积分
+        setUsers(prev => prev.map(u => 
+          u.id === userId ? { ...u, credits: newCredits } : u
+        ));
+      } else {
+        // 兜底：没有 userId 时仍调用 API（兼容旧事件）
+        console.log('[管理后台] 积分变化事件无详情，回退到 API 刷新');
+        fetch('/api/users', { credentials: 'include' })
+          .then(res => res.json())
+          .then(data => data.data && setUsers(data.data))
+          .catch(err => console.error('[管理后台] 刷新用户列表失败:', err));
+      }
     };
     window.addEventListener('creditsChanged', handleCreditsChanged);
 
@@ -1654,8 +1657,16 @@ export default function AdminDashboard() {
         if (data.success) {
           // 刷新 admin 状态（供应配额相关）
           fetchAdminInfo();
-          // #269 新增：触发全局积分变化事件，带来源标识
-          window.dispatchEvent(new CustomEvent('creditsChanged', { detail: { source: 'admin' } }));
+          // #270 触发全局积分变化事件，携带 userId 和 newCredits 实现本地热更新
+          if (data.data?.userNewCredits !== undefined) {
+            window.dispatchEvent(new CustomEvent('creditsChanged', {
+              detail: {
+                userId: distributeUserId,
+                newCredits: data.data.userNewCredits,
+                source: 'admin',
+              }
+            }));
+          }
           toast.success(`成功划扣 ${amount} 配额`);
         } else {
           // 恢复用户积分
@@ -1678,8 +1689,16 @@ export default function AdminDashboard() {
         });
         const data = await res.json();
         if (data.success) {
-          // #269 新增：触发全局积分变化事件，带来源标识
-          window.dispatchEvent(new CustomEvent('creditsChanged', { detail: { source: 'admin' } }));
+          // #270 触发全局积分变化事件，携带 userId 和 newCredits 实现本地热更新
+          if (data.data?.userNewCredits !== undefined) {
+            window.dispatchEvent(new CustomEvent('creditsChanged', {
+              detail: {
+                userId: distributeUserId,
+                newCredits: data.data.userNewCredits,
+                source: 'admin',
+              }
+            }));
+          }
           toast.success(operation === 'add' 
             ? `成功增加 ${amount} 积分给用户` 
             : `成功扣减 ${amount} 积分`);

@@ -317,24 +317,32 @@ export function AIGeneratorProvider({ children }: { children: React.ReactNode })
     refreshUserInfo();
   }, [refreshUserInfo]);
   
-  // #269 监听全局积分变化事件
-  // 注意：大多数触发源（生图完成、充值成功）已经调用过 refreshUserInfo
-  // 这里只需要更新缓存，不需要再发起 API 请求
-  // 只有管理后台调整积分这种"外部"变化才需要刷新，但管理后台自己会调用 refreshUserInfo
+  // #270 监听全局积分变化事件（本地热更新，减少 API 请求）
   useEffect(() => {
-    const handleCreditsChanged = (event: CustomEvent) => {
-      const source = event.detail?.source;
-      console.log('[AIGeneratorContext] 收到积分变化事件，来源:', source || 'unknown');
-      // 只在来自管理后台的事件时刷新（管理后台调整积分）
-      if (source === 'admin') {
+    const handleCreditsChanged = (event: Event) => {
+      const customEvent = event as CustomEvent<{ userId?: string; newCredits?: number; source?: string }>;
+      const { userId, newCredits, source } = customEvent.detail || {};
+      
+      console.log('[AIGeneratorContext] 收到积分变化事件:', { userId, newCredits, source });
+      
+      // 检查是否是当前用户的积分变化
+      if (userId && newCredits !== undefined && userId === userIdRef.current) {
+        // 本地热更新（事件来自同一用户的其他页面）
+        console.log(`[AIGeneratorContext] #270 本地热更新积分: ${credits} → ${newCredits}`);
+        setCredits(newCredits);
+        updateCachedCredits(newCredits);
+      } else if (source === 'admin' && userId === userIdRef.current) {
+        // 管理后台调整当前用户积分，强制刷新确保数据准确
+        console.log('[AIGeneratorContext] 管理后台调整积分，强制刷新');
         clearCachedUser();
         refreshUserInfo();
       }
+      // 其他用户的积分变化，忽略（管理后台会单独处理）
     };
     
     window.addEventListener('creditsChanged', handleCreditsChanged as EventListener);
     return () => window.removeEventListener('creditsChanged', handleCreditsChanged as EventListener);
-  }, [refreshUserInfo]);
+  }, [refreshUserInfo, credits]);
 
   // 🔧 监听登录成功事件
   useEffect(() => {
@@ -514,6 +522,20 @@ export function AIGeneratorProvider({ children }: { children: React.ReactNode })
         onImageReceived: options.onImageReceived,
         onPlaceholderFailed: options.onPlaceholderFailed,
         
+        // #270 新增：任务开始时扣费后立即更新积分（让用户立即看到变化）
+        onCreditsDeducted: (data) => {
+          console.log(`[AIGeneratorContext] #270 收到扣费回调: 扣除 ${data.creditsCharged}, 余额 ${data.creditsBalance}`);
+          setCredits(data.creditsBalance);
+          updateCachedCredits(data.creditsBalance);
+          // 触发事件通知 Navbar 等其他组件（携带 userId）
+          window.dispatchEvent(new CustomEvent('creditsChanged', {
+            detail: {
+              userId: userIdRef.current,
+              newCredits: data.creditsBalance,
+            }
+          }));
+        },
+        
         // 进度回调
         onProgress: options.onProgress,
         
@@ -532,9 +554,13 @@ export function AIGeneratorProvider({ children }: { children: React.ReactNode })
             setCredits(genResult.creditsBalance);
             // 🔥 同步更新缓存，避免刷新后回退
             updateCachedCredits(genResult.creditsBalance);
-            // #269 触发事件通知其他组件（如 Navbar）
-            // 注意：AIGeneratorContext 的事件监听会跳过自己触发的刷新（见下方监听逻辑）
-            window.dispatchEvent(new CustomEvent('creditsChanged'));
+            // #270 触发事件通知其他组件（携带 userId + newCredits，实现本地热更新）
+            window.dispatchEvent(new CustomEvent('creditsChanged', {
+              detail: {
+                userId: userIdRef.current,
+                newCredits: genResult.creditsBalance,
+              }
+            }));
           } else {
             // ⚠️ 如果 SSE 没返回余额，查询最新余额
             console.warn('[AIGeneratorContext] SSE 未返回余额，触发查询');

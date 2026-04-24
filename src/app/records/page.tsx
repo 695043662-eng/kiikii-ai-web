@@ -46,7 +46,7 @@ export default function PersonalPage() {
   // ============================================
   // 【接入 AIGeneratorContext - 统一用户状态】
   // ============================================
-  const { credits, isLoggedIn, setIsLoggedIn, refreshUserInfo } = useAIGenerator();
+  const { credits, userId, isLoggedIn, setIsLoggedIn, refreshUserInfo } = useAIGenerator();
   
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
@@ -175,7 +175,15 @@ export default function PersonalPage() {
         // 🔒 军规：充值/兑换必须穿透缓存，先清除再刷新
         clearCachedUser();  // 清除旧缓存，重置刷新标记
         await refreshUserInfo();  // 真正调用 API 获取最新积分
-        window.dispatchEvent(new CustomEvent('creditsChanged'));
+        // #270 触发全局事件，携带 userId 实现本地热更新
+        if (data.credits !== undefined) {
+          window.dispatchEvent(new CustomEvent('creditsChanged', {
+            detail: {
+              userId: userId,
+              newCredits: data.credits,
+            }
+          }));
+        }
       } else {
         setError(data.error || '兑换码无效');
       }

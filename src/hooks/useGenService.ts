@@ -148,6 +148,10 @@ export interface GenServiceConfig {
   onVideoProgress?: (progress: VideoProgress) => void;
   onVideoReceived?: (data: VideoEvent) => void;
   
+  // ========== 积分扣费回调 ==========
+  // #270 新增：任务开始时扣费后立即回调，让前端及时显示积分变化
+  onCreditsDeducted?: (data: { creditsCharged: number; creditsBalance: number }) => void;
+  
   // 回调
   onProgress?: (progress: GenProgress) => void;
   onComplete?: (result: GenResult) => void;
@@ -747,12 +751,20 @@ export function useGenService() {
               
             case 'start':
               // 收到后端返回的 actualTaskId，触发干净替换
-              console.log('[GenService] 收到 start 事件:', { taskId: data.taskId, count: data.count, placeholderCount: placeholderReplacements.length });
+              console.log('[GenService] 收到 start 事件:', { taskId: data.taskId, count: data.count, placeholderCount: placeholderReplacements.length, creditsCharged: data.creditsCharged, creditsBalance: data.creditsBalance });
               if (data.taskId && config.onActualTaskIdReceived) {
                 const actualTaskId = data.taskId;
                 placeholderReplacements.forEach(({ placeholderId }) => {
                   console.log('[GenService] 触发 onActualTaskIdReceived:', { placeholderId, actualTaskId });
                   config.onActualTaskIdReceived!(placeholderId, actualTaskId);
+                });
+              }
+              // #270 新增：任务开始时扣费后立即回调，让前端及时显示积分变化
+              if (data.creditsBalance !== undefined && data.creditsCharged !== undefined) {
+                console.log(`[GenService] #270 积分扣费回调: 扣除 ${data.creditsCharged}, 余额 ${data.creditsBalance}`);
+                config.onCreditsDeducted?.({
+                  creditsCharged: data.creditsCharged,
+                  creditsBalance: data.creditsBalance,
                 });
               }
               break;

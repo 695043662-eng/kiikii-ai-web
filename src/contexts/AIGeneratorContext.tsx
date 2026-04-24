@@ -526,6 +526,8 @@ export function AIGeneratorProvider({ children }: { children: React.ReactNode })
             setCredits(genResult.creditsBalance);
             // 🔥 同步更新缓存，避免刷新后回退
             updateCachedCredits(genResult.creditsBalance);
+            // #269 新增：触发全局积分变化事件，通知管理后台等
+            window.dispatchEvent(new CustomEvent('creditsChanged'));
           } else {
             // ⚠️ 如果 SSE 没返回余额，查询最新余额
             console.warn('[AIGeneratorContext] SSE 未返回余额，触发查询');

@@ -604,7 +604,8 @@ export default function AdminDashboard() {
     }
   }, [redeemChannelFilter, redeemStatusFilter, currentUser]);
 
-  // 🔧 #121 焦点回刷 + 10秒静默轮询（管理后台积分动态化）
+  // 🔧 #121 焦点回刷 + 30秒静默轮询（管理后台积分动态化）
+  // 🔧 #269 新增：监听 creditsChanged 事件，实现方案A（每次操作后刷新）
   useEffect(() => {
     if (!currentUser) return;
 
@@ -617,15 +618,24 @@ export default function AdminDashboard() {
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // 2. 静默轮询：10秒一次
+    // 2. 静默轮询：30秒一次（作为兜底，主要依赖事件监听）
     const pollInterval = setInterval(() => {
       console.log('[管理后台] 静默轮询：刷新积分数据');
       fetchAdminInfo();
-    }, 10000);
+    }, 30000);
+
+    // 3. #269 新增：监听全局积分变化事件（方案A核心）
+    // 前端生图成功/失败、充值成功等场景都会触发此事件
+    const handleCreditsChanged = () => {
+      console.log('[管理后台] 收到积分变化事件：立即刷新');
+      fetchAdminInfo();
+    };
+    window.addEventListener('creditsChanged', handleCreditsChanged);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       clearInterval(pollInterval);
+      window.removeEventListener('creditsChanged', handleCreditsChanged);
     };
   }, [currentUser]);
 
@@ -1628,6 +1638,8 @@ export default function AdminDashboard() {
         if (data.success) {
           // 刷新 admin 状态（供应配额相关）
           fetchAdminInfo();
+          // #269 新增：触发全局积分变化事件
+          window.dispatchEvent(new CustomEvent('creditsChanged'));
           toast.success(`成功划扣 ${amount} 配额`);
         } else {
           // 恢复用户积分
@@ -1650,6 +1662,8 @@ export default function AdminDashboard() {
         });
         const data = await res.json();
         if (data.success) {
+          // #269 新增：触发全局积分变化事件，通知前端其他页面
+          window.dispatchEvent(new CustomEvent('creditsChanged'));
           toast.success(operation === 'add' 
             ? `成功增加 ${amount} 积分给用户` 
             : `成功扣减 ${amount} 积分`);

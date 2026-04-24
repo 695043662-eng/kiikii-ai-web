@@ -629,6 +629,7 @@ export async function POST(request: NextRequest) {
   let totalCredits = 0;
   let creditsPerImage = 0;
   let actualTaskId = '';
+  let creditsBalanceAfterDeduct: number | null = null;  // #276 修复：移到外层，catch 块可访问
 
   try {
     console.log('========================================');
@@ -793,7 +794,7 @@ export async function POST(request: NextRequest) {
 
     // ====== #105 修复：后端直接扣积分（前端不再扣积分）======
     let creditsDeducted = false;
-    let creditsBalanceAfterDeduct: number | null = null;  // 🔥 保存扣费后的余额
+    // creditsBalanceAfterDeduct 已在函数开头定义（#276 修复：移到外层，catch 块可访问）
     
     console.log(`[积分扣除] 检查条件: actualUserId=${!!actualUserId}, totalCredits=${totalCredits}`);
     
@@ -1198,7 +1199,7 @@ export async function POST(request: NextRequest) {
                 
                 // 立即检查是否需要发送 complete 事件
                 // #226: 同时更新 completedAt 用于前端判断
-                const finalCreditsBalance = creditsBalanceAfterDeduct;
+                let finalCreditsBalance = creditsBalanceAfterDeduct;
                 
                 // 部分失败退还积分
                 let finalRefundAmount = 0;
@@ -1207,7 +1208,9 @@ export async function POST(request: NextRequest) {
                   try {
                     const refundResult = await refundCredits(actualUserId, finalRefundAmount, actualTaskId, `部分图片失败退还`);
                     if (refundResult.success) {
-                      console.log(`[积分补偿] 部分失败退还 ${finalRefundAmount} 积分成功`);
+                      console.log(`[积分补偿] 部分失败退还 ${finalRefundAmount} 积分成功，剩余 ${refundResult.remaining}`);
+                      // #276 修复：更新最终余额，确保前端显示正确的积分
+                      finalCreditsBalance = refundResult.remaining ?? finalCreditsBalance;
                       // #267 标记已返还，防止重复
                       const currentResult = getTaskResult(actualTaskId);
                       if (currentResult) {
@@ -1372,6 +1375,8 @@ export async function POST(request: NextRequest) {
           if (waited >= maxWaitTime) {
             // 检查缓存中的任务状态，如果还有未完成的图片，标记为失败
             const currentResult = getTaskResult(actualTaskId);
+            let timeoutCreditsBalance = creditsBalanceAfterDeduct;  // #276 修复：超时场景的积分余额
+            
             if (currentResult && currentResult.status === 'generating') {
               const generationCount = currentResult.requestParams?.generationCount || 0;
               const imageItems = currentResult.imageItems || [];
@@ -1395,22 +1400,27 @@ export async function POST(request: NextRequest) {
                 completedAt: Date.now(),
               });
               
-              // ⚠️ 积分补偿：部分或全部失败时，退还失败部分的积分
+              // #276 修复：积分补偿改为 await，确保返还完成后再发送事件
               // #155 防止积分重复返还
               if (failedCount > 0 && creditsDeducted && actualUserId && creditsPerImage > 0 && !currentResult.creditsRefunded) {
                 const refundAmount = failedCount * creditsPerImage;
                 console.log(`[积分补偿] 超时场景：${failedCount}/${generationCount} 张失败，退还 ${refundAmount} 积分`);
-                refundCredits(actualUserId, refundAmount, actualTaskId, `超时：${failedCount}张图片失败`)
-                  .then(result => {
-                    if (result.success) {
-                      console.log(`[积分补偿] 超时退还成功，剩余 ${result.remaining} 积分`);
-                      // #155 标记已返还，防止重复
-                      setTaskResult(actualTaskId, { ...getTaskResult(actualTaskId)!, creditsRefunded: true });
-                    } else {
-                      console.error(`[积分补偿] 超时退还失败: ${result.error}`);
+                try {
+                  const refundResult = await refundCredits(actualUserId, refundAmount, actualTaskId, `超时：${failedCount}张图片失败`);
+                  if (refundResult.success) {
+                    timeoutCreditsBalance = refundResult.remaining ?? timeoutCreditsBalance;  // #276 修复：更新余额
+                    console.log(`[积分补偿] 超时退还成功，剩余 ${refundResult.remaining} 积分`);
+                    // #155 标记已返还，防止重复
+                    const latestResult = getTaskResult(actualTaskId);
+                    if (latestResult) {
+                      setTaskResult(actualTaskId, { ...latestResult, creditsRefunded: true });
                     }
-                  })
-                  .catch(err => console.error(`[积分补偿] 超时退还异常:`, err));
+                  } else {
+                    console.error(`[积分补偿] 超时退还失败: ${refundResult.error}`);
+                  }
+                } catch (err) {
+                  console.error(`[积分补偿] 超时退还异常:`, err);
+                }
               }
               
               console.log(`[SSE] 超时，标记未完成图片为失败: ${actualTaskId}`);
@@ -1420,7 +1430,8 @@ export async function POST(request: NextRequest) {
               type: 'timeout', 
               taskId: actualTaskId,
               message: '请求超时，请稍后查询结果',
-              terminalTaskIds: terminalTaskIds
+              terminalTaskIds: terminalTaskIds,
+              creditsBalance: timeoutCreditsBalance,  // #276 修复：携带最新积分余额
             });
           }
 
@@ -1457,31 +1468,35 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('图生图 API 错误:', error);
 
-    // #155 防止积分重复返还
+    // #276 修复：API 内部错误场景改为 await，确保返还完成后再返回
+    let errorCreditsBalance = creditsBalanceAfterDeduct;  // 当前余额
     const currentResult = actualTaskId ? getTaskResult(actualTaskId) : null;
     if (actualUserId && totalCredits && !currentResult?.creditsRefunded) {
       console.log(`[积分补偿] API 错误，尝试退还 ${totalCredits} 积分`);
-      refundCredits(actualUserId, totalCredits, actualTaskId || 'unknown', 'API 内部错误')
-        .then(result => {
-          if (result.success) {
-            console.log(`[积分补偿] 退还成功`);
-            // #155 标记已返还
-            if (actualTaskId) {
-              const latestResult = getTaskResult(actualTaskId);
-              if (latestResult) {
-                setTaskResult(actualTaskId, { ...latestResult, creditsRefunded: true });
-              }
+      try {
+        const refundResult = await refundCredits(actualUserId, totalCredits, actualTaskId || 'unknown', 'API 内部错误');
+        if (refundResult.success) {
+          errorCreditsBalance = refundResult.remaining ?? errorCreditsBalance;
+          console.log(`[积分补偿] 退还成功，剩余 ${errorCreditsBalance} 积分`);
+          // #155 标记已返还
+          if (actualTaskId) {
+            const latestResult = getTaskResult(actualTaskId);
+            if (latestResult) {
+              setTaskResult(actualTaskId, { ...latestResult, creditsRefunded: true });
             }
-          } else {
-            console.error(`[积分补偿] 退还失败: ${result.error}`);
           }
-        })
-        .catch(err => console.error(`[积分补偿] 退还异常:`, err));
+        } else {
+          console.error(`[积分补偿] 退还失败: ${refundResult.error}`);
+        }
+      } catch (err) {
+        console.error(`[积分补偿] 退还异常:`, err);
+      }
     }
 
     return new Response(JSON.stringify({ 
       error: '服务器内部错误',
-      details: error instanceof Error ? error.message : '未知错误'
+      details: error instanceof Error ? error.message : '未知错误',
+      creditsBalance: errorCreditsBalance,  // #276 修复：携带最新积分余额
     }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },

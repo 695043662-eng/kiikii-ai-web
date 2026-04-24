@@ -99,7 +99,7 @@ export interface GenResult {
 
 // 生成错误
 export interface GenError {
-  type: 'global' | 'item';
+  type: 'global' | 'item' | 'timeout';  // #276 修复：新增 timeout 类型
   index?: number;
   message: string;
   taskId?: string;
@@ -879,6 +879,34 @@ export function useGenService() {
                   message: data.error || '生成失败',
                   taskId: data.taskId,
                   placeholderIds: Array.from(pendingPlaceholders),
+                });
+              }
+              
+              // #276 修复：error 事件携带积分余额时，触发积分更新回调
+              if (data.creditsBalance !== undefined && data.creditsBalance !== null) {
+                console.log('[GenService] error 事件携带积分余额:', data.creditsBalance);
+                config.onCreditsDeducted?.({
+                  creditsCharged: data.creditsCharged ?? 0,
+                  creditsBalance: data.creditsBalance,
+                });
+              }
+              break;
+              
+            case 'timeout':
+              // #276 新增：处理超时事件，携带积分余额
+              console.log('[GenService] 收到 timeout 事件:', data);
+              config.onError?.({
+                type: 'timeout',
+                message: data.message || '请求超时，请稍后查询结果',
+                taskId: data.taskId,
+                placeholderIds: Array.from(pendingPlaceholders),
+              });
+              // 更新积分余额
+              if (data.creditsBalance !== undefined && data.creditsBalance !== null) {
+                console.log('[GenService] timeout 事件携带积分余额:', data.creditsBalance);
+                config.onCreditsDeducted?.({
+                  creditsCharged: data.creditsCharged ?? 0,
+                  creditsBalance: data.creditsBalance,
                 });
               }
               break;

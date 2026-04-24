@@ -134,6 +134,7 @@
 | #273 | 管理后台拖动排序弹回 | sort_order 映射错误 model.id → model.sort_order | ✅ 已修复 | |
 | #274 | 默认模型改为GPT Image 2 + 删除2K/4K | Context默认值 + inferParameters只返回1K | ✅ 已修复 | |
 | #275 | 安全漏洞：MIME伪造+SSRF+execSync | 魔数验证+URL白名单+移除child_process | ✅ 已修复 | 安全核心 |
+| #276 | 生成失败积分返还不更新前端 | 双保险：后端await返还+前端timeout事件处理 | ✅ 已修复 | 核心必读 |
 
 ---
 
@@ -4347,6 +4348,167 @@ if (currentRecords.length >= MAX_RECORDS) {
   - handleRegenerate 添加 finally 块强制解锁
 - `src/store/historyStore.ts`
   - addRecord 添加自动清理机制
+
+### 状态
+✅ 已修复
+
+---
+
+## #276 - 生成失败积分返还不更新前端（CRITICAL）⚠️ 核心必读
+
+**问题描述**：
+生成失败时积分返还偶尔不触发前端更新，需要手动 F5 刷新才能看到正确余额。
+
+**发现的 4 个漏洞**：
+
+### 漏洞 1：部分失败时 complete 事件的 creditsBalance 未更新
+**位置**：`src/app/api/image-to-image/route.ts:1201-1238`
+
+**问题代码**：
+```typescript
+const finalCreditsBalance = creditsBalanceAfterDeduct;  // ❌ 初始值
+
+if (failedCount > 0 && ...) {
+  const refundResult = await refundCredits(...);
+  if (refundResult.success) {
+    console.log(`部分失败退还成功`);
+    // ❌ 关键缺失：没有更新 finalCreditsBalance！
+  }
+}
+
+// 发送 complete 事件
+creditsBalance: finalCreditsBalance,  // ❌ 使用的是旧值
+```
+
+**修复**：
+```typescript
+let finalCreditsBalance = creditsBalanceAfterDeduct;  // ✅ 改为 let
+
+if (refundResult.success) {
+  finalCreditsBalance = refundResult.remaining ?? finalCreditsBalance;  // ✅ 更新余额
+}
+```
+
+### 漏洞 2：超时场景积分返还后不通知前端
+**位置**：`src/app/api/image-to-image/route.ts:1400-1430`
+
+**问题代码**：
+```typescript
+// ❌ 使用 .then() 异步返还，不等待完成
+refundCredits(...).then(result => {
+  console.log('退还成功');
+  // ❌ 没有通知前端！
+});
+
+// ❌ timeout 事件不携带 creditsBalance
+sendEvent({ type: 'timeout', taskId, message: '...' });
+```
+
+**修复**：
+```typescript
+let timeoutCreditsBalance = creditsBalanceAfterDeduct;
+
+// ✅ 改为 await，等待返还完成
+const refundResult = await refundCredits(...);
+if (refundResult.success) {
+  timeoutCreditsBalance = refundResult.remaining ?? timeoutCreditsBalance;
+}
+
+// ✅ timeout 事件携带最新余额
+sendEvent({ 
+  type: 'timeout', 
+  taskId, 
+  creditsBalance: timeoutCreditsBalance,  // ✅ 携带最新余额
+});
+```
+
+### 漏洞 3：API 内部错误场景不通知前端
+**位置**：`src/app/api/image-to-image/route.ts:1467-1499`
+
+**问题代码**：
+```typescript
+// ❌ 使用 .then() 异步返还
+refundCredits(...).then(result => {
+  console.log('退还成功');
+  // ❌ 没有通知前端！
+});
+
+return new Response(JSON.stringify({ error: '服务器内部错误' }), ...);
+// ❌ 不携带 creditsBalance
+```
+
+**修复**：
+```typescript
+let errorCreditsBalance = creditsBalanceAfterDeduct;
+
+// ✅ 改为 await
+const refundResult = await refundCredits(...);
+if (refundResult.success) {
+  errorCreditsBalance = refundResult.remaining ?? errorCreditsBalance;
+}
+
+return new Response(JSON.stringify({ 
+  error: '服务器内部错误',
+  creditsBalance: errorCreditsBalance,  // ✅ 携带最新余额
+}), ...);
+```
+
+### 漏洞 4：前端 error 事件不处理积分更新
+**位置**：`src/hooks/useGenService.ts:859-884`
+
+**问题代码**：
+```typescript
+case 'error':
+  config.onError?.({ type: 'global', message: data.error, ... });
+  // ❌ 没有读取和更新 creditsBalance！
+  break;
+```
+
+**修复**：
+```typescript
+case 'error':
+  config.onError?.({ type: 'global', message: data.error, ... });
+  
+  // ✅ 如果携带了 creditsBalance，触发积分更新回调
+  if (data.creditsBalance !== undefined && data.creditsBalance !== null) {
+    config.onCreditsDeducted?.({
+      creditsCharged: data.creditsCharged ?? 0,
+      creditsBalance: data.creditsBalance,
+    });
+  }
+  break;
+
+case 'timeout':  // ✅ 新增 timeout 事件处理
+  config.onError?.({ type: 'timeout', message: data.message, ... });
+  
+  if (data.creditsBalance !== undefined && data.creditsBalance !== null) {
+    config.onCreditsDeducted?.({
+      creditsCharged: data.creditsCharged ?? 0,
+      creditsBalance: data.creditsBalance,
+    });
+  }
+  break;
+```
+
+### 方案 C（双保险）完整修复
+
+| 层级 | 文件 | 修复内容 |
+|------|------|----------|
+| 后端 | `route.ts:1201` | `let finalCreditsBalance` + 返还后更新 |
+| 后端 | `route.ts:1400-1430` | 超时场景 await 返还 + timeout 事件携带 creditsBalance |
+| 后端 | `route.ts:1467-1499` | API 错误场景 await 返还 + 响应携带 creditsBalance |
+| 前端 | `useGenService.ts:100-108` | GenError 类型新增 'timeout' |
+| 前端 | `useGenService.ts:859-920` | error/timeout 事件处理积分更新 |
+
+### 修改文件
+- `src/app/api/image-to-image/route.ts`
+  - 第 630 行：`creditsBalanceAfterDeduct` 移到函数开头（catch 块可访问）
+  - 第 1201 行：`let finalCreditsBalance` + 返还后更新
+  - 第 1373-1430 行：超时场景 await 返还 + timeout 事件携带 creditsBalance
+  - 第 1467-1499 行：API 错误场景 await 返还 + 响应携带 creditsBalance
+- `src/hooks/useGenService.ts`
+  - 第 102 行：GenError 类型新增 'timeout'
+  - 第 885-920 行：error/timeout 事件处理积分更新
 
 ### 状态
 ✅ 已修复

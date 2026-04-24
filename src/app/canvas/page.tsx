@@ -3624,7 +3624,10 @@ function CanvasApp({ canvas, router }: { canvas: CanvasContextType; router: Retu
         // clearAllImages();
       },
       onError: (error) => {
-        clientTaskIds.forEach(id => {
+        // #279 修复：只标记 error.placeholderIds 中的占位符为失败，不"连坐"已成功的图片
+        const failedIds = error.placeholderIds || clientTaskIds;
+        console.log('[Canvas onError] 待标记失败的占位符:', failedIds, '原始 clientTaskIds:', clientTaskIds);
+        failedIds.forEach(id => {
           // 简化错误信息
           const displayError = error.message?.includes('违反') || error.message?.includes('违规') || error.message?.includes('政策')
             ? '此内容可能违反我们的政策。您可以尝试更改提示词或更换图像'

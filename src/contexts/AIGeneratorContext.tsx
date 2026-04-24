@@ -224,7 +224,8 @@ export interface AIGeneratorContextType {
 
 // 默认模型选项
 const defaultImageModelOptions = ['nano-banana-2', 'nano-banana-2-cl', 'nano-banana', 'nano-banana-fast', 'nano-banana-pro', 'nano-banana-pro-vt', 'nano-banana-pro-cl', 'nano-banana-2-4k-cl', 'nano-banana-pro-4k-vip'];
-const defaultVideoModelOptions = ['seedance-1-0', 'seedance-1-0-pro'];
+// #277 修复：默认视频模型改为 grs-sora-2（与数据库一致）
+const defaultVideoModelOptions = ['grs-sora-2'];
 const defaultPresetColors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9', '#F8B500', '#2ECC71'];
 
 // Context

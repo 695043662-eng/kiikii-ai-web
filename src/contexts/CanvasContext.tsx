@@ -418,6 +418,9 @@ export function CanvasProvider({ children }: { children: React.ReactNode }) {
   const stateRef = useRef(state);
   stateRef.current = state;
   
+  // #289 修复：跟踪上一次元素数量，检测删除操作立即保存
+  const prevElementsCountRef = useRef(state.elements.length);
+  
   // #053 修复：回滚 #045 的修改，恢复原来的逻辑
   // #034 修复：isInitialized 一开始就是 true，因为 useReducer 已经同步读取了 localStorage
   const [isInitialized, setIsInitialized] = useState(true);
@@ -580,6 +583,7 @@ export function CanvasProvider({ children }: { children: React.ReactNode }) {
 
   // #040 性能优化：分离保存逻辑，减少不必要的 useEffect 触发
   // 1. 元素变化时保存（较少发生）
+  // #289 修复：删除元素时立即保存，不等待防抖
   useEffect(() => {
     if (isRestoring) return;
     
@@ -591,6 +595,20 @@ export function CanvasProvider({ children }: { children: React.ReactNode }) {
     const isInitialState = state.elements.length === 0 && !hasViewportChange;
     if (isInitialState) return;
     
+    // #289 修复：检测元素是否减少（删除操作），立即保存
+    const currentCount = state.elements.length;
+    const prevCount = prevElementsCountRef.current;
+    const isElementDeleted = currentCount < prevCount;
+    prevElementsCountRef.current = currentCount;
+    
+    if (isElementDeleted) {
+      // 删除操作，立即保存
+      console.log('[Canvas] #289 检测到元素删除，立即保存到 localStorage');
+      saveStateToStorage(state, false);
+      return;
+    }
+    
+    // 其他操作，防抖保存
     const timer = setTimeout(() => {
       saveStateToStorage(state, isRestoring);
     }, 1000);

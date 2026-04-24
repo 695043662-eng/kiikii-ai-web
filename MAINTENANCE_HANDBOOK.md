@@ -181,6 +181,7 @@ exec_sql({ sql: "SELECT * FROM users" })
 | #286 | refundCredits 并发安全 | 先插入日志再更新积分 + 唯一约束检测 | ✅ 已修复 | **核心必读** |
 | #287 | 生图发送到画布缺少 imageKey | sessionStorage 传递 imageKey + 画布读取使用 | ✅ 已修复 | **核心必读** |
 | #288 | GET超时返还逻辑错误 | 数学结算逻辑替代状态统计 | ✅ 已修复 | **核心必读** |
+| #289 | 删除图片刷新后恢复 | 元素删除立即保存localStorage | ✅ 已修复 | |
 
 ---
 
@@ -5173,6 +5174,76 @@ if (expectedRefund > 0) {
 
 **补偿操作**：
 已补偿 54 积分（18+18+6+12），记录 reference_id: compensation-2026-04-24-01
+
+---
+
+### 状态
+✅ 已修复
+
+---
+
+## #289 删除图片刷新后恢复
+
+**问题描述**：
+用户反馈："画布中的图片我删除了，刷新网页又出来了？"
+
+**根因分析**：
+1. 元素变化后有 **1 秒防抖保存** 到 localStorage
+2. 用户删除图片后，如果 **1 秒内刷新页面**，删除操作还没保存
+3. 页面重新加载时从 localStorage 恢复了旧数据，删除的图片又出现了
+
+**原有代码问题**：
+```typescript
+// CanvasContext.tsx - 自动保存有 1 秒防抖
+useEffect(() => {
+  const timer = setTimeout(() => {
+    saveStateToStorage(state, isRestoring);
+  }, 1000);  // 防抖 1 秒
+  return () => clearTimeout(timer);
+}, [state.elements, state.annotations, isRestoring]);
+```
+
+**修复方案**：
+检测元素数量减少（删除操作）时，立即保存，不等待防抖。
+
+```typescript
+// #289 修复：跟踪上一次元素数量
+const prevElementsCountRef = useRef(state.elements.length);
+
+useEffect(() => {
+  // ... 其他检查 ...
+  
+  // #289 修复：检测元素是否减少（删除操作），立即保存
+  const currentCount = state.elements.length;
+  const prevCount = prevElementsCountRef.current;
+  const isElementDeleted = currentCount < prevCount;
+  prevElementsCountRef.current = currentCount;
+  
+  if (isElementDeleted) {
+    // 删除操作，立即保存
+    console.log('[Canvas] #289 检测到元素删除，立即保存到 localStorage');
+    saveStateToStorage(state, false);
+    return;
+  }
+  
+  // 其他操作，防抖保存
+  const timer = setTimeout(() => {
+    saveStateToStorage(state, isRestoring);
+  }, 1000);
+  return () => clearTimeout(timer);
+}, [state.elements, state.annotations, isRestoring]);
+```
+
+**修改文件**：
+- `src/contexts/CanvasContext.tsx`
+  - 添加 `prevElementsCountRef` 跟踪元素数量
+  - 在 useEffect 中检测元素数量减少，立即保存
+
+**验证方法**：
+1. 在画布中上传或生成图片
+2. 删除图片
+3. 立即刷新页面
+4. 确认图片不再出现
 
 ---
 

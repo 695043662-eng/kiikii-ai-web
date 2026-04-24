@@ -2878,20 +2878,6 @@ export default function SingleGeneratePage() {
                           <Download className="w-4 h-4 mr-1" />
                           下载
                         </Button>
-                        <Button size="sm" className="bg-black hover:bg-gray-900 text-white" onClick={() => {
-                          // 存储到 sessionStorage，画布页面读取
-                          // #287 修复：添加 imageKey，确保刷新后图片不丢失
-                          const imageKey = selectedTask.imageKeys?.[selectedImageIndex] || null;
-                          sessionStorage.setItem('generateToSend', JSON.stringify({
-                            imageUrl: currentImageUrl,
-                            imageKey: imageKey,
-                            prompt: selectedTask.params?.prompt || '',
-                          }));
-                          router.push('/canvas');
-                        }}>
-                          <ImageIcon className="w-4 h-4 mr-1" />
-                          发送到画布
-                        </Button>
                       </div>
                       {/* 左右切换按钮 - 支持跨任务切换 */}
                   {allImages.length > 1 && (

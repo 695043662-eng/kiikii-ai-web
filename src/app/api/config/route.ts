@@ -109,7 +109,7 @@ function inferParameters(credits: number, modelType: string, config?: any, model
     }
     
     // ===== 只支持 1K 的模型 =====
-    if (key === 'nano-banana' || key === 'nano-banana-fast') {
+    if (key === 'nano-banana' || key === 'nano-banana-fast' || key === 'gpt-image-2') {
       return {
         resolutions: [
           { label: '1K', value: '1K', credits: credits },

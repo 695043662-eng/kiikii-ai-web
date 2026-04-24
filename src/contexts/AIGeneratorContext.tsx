@@ -232,7 +232,7 @@ const AIGeneratorContext = createContext<AIGeneratorContextType | null>(null);
 
 export function AIGeneratorProvider({ children }: { children: React.ReactNode }) {
   // ========== 模型配置 ==========
-  const [selectedModel, setSelectedModel] = useState('nano-banana-2');
+  const [selectedModel, setSelectedModel] = useState('gpt-image-2');
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [modelTab, setModelTab] = useState<'image' | 'video'>('image');
   const [modelStatuses, setModelStatuses] = useState<Record<string, { status: boolean; error: string }>>({});

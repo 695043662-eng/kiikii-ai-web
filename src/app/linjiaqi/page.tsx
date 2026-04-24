@@ -517,7 +517,7 @@ export default function AdminDashboard() {
         description: model.description,
         is_active: model.is_active ?? true,
         is_visible: model.is_visible ?? true,
-        sort_order: model.id,
+        sort_order: model.sort_order ?? model.id,
         created_at: '',
         updated_at: null,
       };

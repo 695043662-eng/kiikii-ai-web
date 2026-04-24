@@ -840,6 +840,8 @@ export async function POST(request: NextRequest) {
         // #244 新增：存储参考图 MD5，用于历史记录恢复
         referenceImageMd5s: md5Hashes,
         referenceImageUrls: requestBody.images,  // 参考图 URL
+        // #267 新增：存储 userId，用于 Webhook 失败返还积分
+        userId: actualUserId,
       },
       // 初始化 imageItems（与 webhook 逻辑一致）
       imageItems: Array.from({ length: generationCount }, (_, idx) => ({
@@ -1170,6 +1172,11 @@ export async function POST(request: NextRequest) {
                     const refundResult = await refundCredits(actualUserId, finalRefundAmount, actualTaskId, `部分图片失败退还`);
                     if (refundResult.success) {
                       console.log(`[积分补偿] 部分失败退还 ${finalRefundAmount} 积分成功`);
+                      // #267 标记已返还，防止重复
+                      const currentResult = getTaskResult(actualTaskId);
+                      if (currentResult) {
+                        setTaskResult(actualTaskId, { ...currentResult, creditsRefunded: true });
+                      }
                     }
                   } catch (err) {
                     console.error(`[积分补偿] 部分失败退还异常:`, err);

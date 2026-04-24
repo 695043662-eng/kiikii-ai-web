@@ -228,12 +228,17 @@ export async function POST(request: NextRequest) {
         const indexMatch = terminalTaskId.match(/^(\d+)-/);
         const index = indexMatch ? parseInt(indexMatch[1]) : 0;
 
+        // #267 从缓存获取 userId 和 requestParams
+        const cachedResult = getTaskResult(mainTaskId);
+        
         mappingResult = {
           mainTaskId,
           index,
           fullTaskId: `${mainTaskId}-${index}`,
+          userId: cachedResult?.requestParams?.userId,  // #267 从缓存获取
+          requestParams: cachedResult?.requestParams,   // #267 从缓存获取
         };
-        console.log(`[Webhook] 从缓存找到主任务: ${mainTaskId}, index: ${index}`);
+        console.log(`[Webhook] 从缓存找到主任务: ${mainTaskId}, index: ${index}, userId: ${cachedResult?.requestParams?.userId || '无'}`);
       }
     }
 

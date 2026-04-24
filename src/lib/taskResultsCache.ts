@@ -34,6 +34,8 @@ export interface TaskResult {
     referenceImageMd5s?: string[];
     referenceImageUrls?: string[];
     referenceImageKeys?: string[];
+    // #267 新增：用户ID（用于 Webhook 失败返还积分）
+    userId?: string;
   };
   // #155 防止积分重复返还
   creditsRefunded?: boolean;

@@ -125,6 +125,7 @@
 | #264 | gpt-image-2 模型 Logo 显示 | 添加专用 logo 文件 + 按模型 ID 判断显示 | ✅ 已修复 | |
 | #265 | 模型 Logo 替换为 Gemini/GPT 专用图标 | 替换文件，尺寸统一 150×150 | ✅ 已修复 | |
 | #266 | 管理后台拖动排序不影响前端显示 | syncToApiModels 函数添加 sort_order 同步 | ✅ 已修复 | |
+| #267 | Webhook 失败未返还积分 | requestParams 存 userId + 状态标记补全 | ✅ 已修复 | 核心必读 |
 
 ---
 
@@ -3220,6 +3221,60 @@ if (existingMd5s.includes(result.md5)) {
   - 第 972-985 行：添加 `terminalTaskId` 检测分支
 - 数据库 `api_configs` 表 id=7
   - `request_body_template.webHook` 字段
+
+**状态**：✅ 已修复
+
+---
+
+### #267 - Webhook 失败未返还积分（CRITICAL）
+
+**问题描述**：
+- gpt-image-2 模型生成失败后，积分没有返还
+- 用户报告"失败后没有返还积分"
+
+**根因分析**：
+1. **问题 1**：`setTaskResult` 创建任务时没有保存 `userId` 到 `requestParams`
+2. **问题 2**：Webhook 从缓存查找主任务时，没有获取 `userId` 和 `requestParams`
+3. **问题 3**：第 1172 行部分失败返还成功后，没有标记 `creditsRefunded = true`
+
+**代码分析**：
+```typescript
+// 问题 1：创建任务时没有保存 userId
+setTaskResult(actualTaskId, {
+  requestParams: {
+    prompt, model, resolution, ...
+    // ❌ 缺少 userId
+  },
+});
+
+// 问题 2：从缓存查找时没有获取 userId
+mappingResult = {
+  mainTaskId,
+  index,
+  fullTaskId: `${mainTaskId}-${index}`,
+  // ❌ 缺少 userId 和 requestParams
+};
+
+// 问题 3：返还成功后没有标记
+if (refundResult.success) {
+  console.log(`[积分补偿] 部分失败退还成功`);
+  // ❌ 缺少 setTaskResult(actualTaskId, { ...currentResult, creditsRefunded: true });
+}
+```
+
+**修复方案**：
+1. 在 `setTaskResult` 的 `requestParams` 中添加 `userId` 字段
+2. 在 Webhook 从缓存查找时，获取 `userId` 和 `requestParams`
+3. 在第 1172 行返还成功后，标记 `creditsRefunded = true`
+
+**修改文件**：
+- `src/lib/taskResultsCache.ts`：`requestParams` 添加 `userId` 字段
+- `src/app/api/image-to-image/route.ts`：第 844 行添加 `userId`，第 1172 行添加状态标记
+- `src/app/api/webhook/draw-callback/route.ts`：第 231-241 行从缓存获取 `userId`
+
+**防重复机制**：
+- 数据库层面：`credit_refund_logs` 表的 `task_id` 唯一约束
+- 内存层面：`creditsRefunded` 状态标记
 
 **状态**：✅ 已修复
 

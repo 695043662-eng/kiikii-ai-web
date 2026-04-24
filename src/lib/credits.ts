@@ -583,8 +583,72 @@ export async function handlePartialRefund(
       console.error(`[积分补偿] #282 ${taskId} 返还失败: ${refundResult.error}`);
       return { success: false, refundAmount: 0, newBalance: null };
     }
-  } catch (err) {
+    } catch (err) {
     console.error(`[积分补偿] #282 ${taskId} 返还异常:`, err);
     return { success: false, refundAmount: 0, newBalance: null };
+  }
+}
+
+/**
+ * #282 统一全额积分返还函数
+ * 
+ * 用于 API 内部异常等场景，直接按传入金额进行全额退款
+ * 
+ * @param getTaskResultFn - 获取任务结果的函数（从调用方传入，避免循环依赖）
+ * @param setTaskResultFn - 设置任务结果的函数（从调用方传入，避免循环依赖）
+ * @param taskId - 任务ID
+ * @param refundAmount - 返还金额
+ * @param userId - 用户ID
+ * @param reason - 返还原因
+ * @returns 返还后的积分余额
+ */
+export async function handleFullRefund(
+  getTaskResultFn: (taskId: string) => any,
+  setTaskResultFn: (taskId: string, result: any) => void,
+  taskId: string,
+  refundAmount: number,
+  userId: string,
+  reason: string = 'API内部异常'
+): Promise<{ success: boolean; newBalance: number | null }> {
+  // Step 1: 获取最新状态（防止使用闭包旧变量）
+  const latestResult = getTaskResultFn(taskId);
+  
+  // Step 2: 防重检查（已返还则直接返回）
+  if (latestResult?.creditsRefunded) {
+    console.log(`[积分补偿] #282 ${taskId} 已返还过，跳过`);
+    return { success: false, newBalance: null };
+  }
+  
+  // Step 3: 无需返还
+  if (refundAmount <= 0) {
+    console.log(`[积分补偿] #282 ${taskId} 返还金额为0，跳过`);
+    return { success: false, newBalance: null };
+  }
+  
+  console.log(`[积分补偿] #282 ${taskId} 全额返还: ${refundAmount} 积分，原因: ${reason}`);
+  
+  // Step 4: 执行返还
+  try {
+    const refundResult = await refundCredits(userId, refundAmount, taskId, reason);
+    
+    if (refundResult.success) {
+      // Step 5: 标记已返还（必须重新获取最新状态）
+      const afterRefundResult = getTaskResultFn(taskId);
+      if (afterRefundResult) {
+        setTaskResultFn(taskId, { ...afterRefundResult, creditsRefunded: true });
+      }
+      
+      console.log(`[积分补偿] #282 ${taskId} 全额返还成功，剩余 ${refundResult.remaining} 积分`);
+      return { 
+        success: true, 
+        newBalance: refundResult.remaining ?? null 
+      };
+    } else {
+      console.error(`[积分补偿] #282 ${taskId} 全额返还失败: ${refundResult.error}`);
+      return { success: false, newBalance: null };
+    }
+  } catch (err) {
+    console.error(`[积分补偿] #282 ${taskId} 全额返还异常:`, err);
+    return { success: false, newBalance: null };
   }
 }

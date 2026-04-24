@@ -64,7 +64,7 @@ import { getTaskResult, setTaskResult, TaskResult } from '@/lib/taskResultsCache
 import { getSupabaseClient } from '@/storage/database/supabase-client';
 import { storeReferenceImage } from '@/lib/reference-image-store';
 import { getImageAPIConfig, getModelAPIConfig, getModelAPIConfigFull, buildRequest } from '@/lib/api-config';
-import { calculateCredits, deductCredits, checkCreditsSufficient, refundCredits, handlePartialRefund } from '@/lib/credits';
+import { calculateCredits, deductCredits, checkCreditsSufficient, refundCredits, handlePartialRefund, handleFullRefund } from '@/lib/credits';
 import { createErrorResponse, safeErrorLog, safeLog } from '@/lib/errorHandler';
 import { checkUserRateLimit, generationCircuitBreaker } from '@/lib/rateLimit';
 import { saveTaskMapping } from '@/lib/taskMapping';
@@ -1427,29 +1427,18 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('图生图 API 错误:', error);
 
-    // #276 修复：API 内部错误场景改为 await，确保返还完成后再返回
-    let errorCreditsBalance = creditsBalanceAfterDeduct;  // 当前余额
-    const currentResult = actualTaskId ? getTaskResult(actualTaskId) : null;
-    if (actualUserId && totalCredits && !currentResult?.creditsRefunded) {
-      console.log(`[积分补偿] API 错误，尝试退还 ${totalCredits} 积分`);
-      try {
-        const refundResult = await refundCredits(actualUserId, totalCredits, actualTaskId || 'unknown', 'API 内部错误');
-        if (refundResult.success) {
-          errorCreditsBalance = refundResult.remaining ?? errorCreditsBalance;
-          console.log(`[积分补偿] 退还成功，剩余 ${errorCreditsBalance} 积分`);
-          // #155 标记已返还
-          if (actualTaskId) {
-            const latestResult = getTaskResult(actualTaskId);
-            if (latestResult) {
-              setTaskResult(actualTaskId, { ...latestResult, creditsRefunded: true });
-            }
-          }
-        } else {
-          console.error(`[积分补偿] 退还失败: ${refundResult.error}`);
-        }
-      } catch (err) {
-        console.error(`[积分补偿] 退还异常:`, err);
-      }
+    // ====== #282 统一全额积分返还 ======
+    let errorCreditsBalance = creditsBalanceAfterDeduct;
+    if (actualTaskId && actualUserId && totalCredits) {
+      const refundResult = await handleFullRefund(
+        getTaskResult,
+        setTaskResult,
+        actualTaskId,
+        totalCredits,
+        actualUserId,
+        'API 内部错误'
+      );
+      errorCreditsBalance = refundResult.newBalance ?? errorCreditsBalance;
     }
 
     return new Response(JSON.stringify({ 

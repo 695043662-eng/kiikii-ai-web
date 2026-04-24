@@ -427,6 +427,7 @@ export default function AdminDashboard() {
   const [searchNickname, setSearchNickname] = useState('');
   const [searchEmail, setSearchEmail] = useState('');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [selectedUserCreditLogs, setSelectedUserCreditLogs] = useState<any[]>([]); // #291 用户详情对话框中的积分流水
   const [showUserDialog, setShowUserDialog] = useState(false);
   const [showAddUserDialog, setShowAddUserDialog] = useState(false);
   const [showAddCreditsDialog, setShowAddCreditsDialog] = useState(false);
@@ -1165,6 +1166,22 @@ export default function AdminDashboard() {
     }
   };
 
+  // #291 获取单个用户的积分流水（用于用户详情对话框）
+  const fetchUserCreditLogs = async (userId: string) => {
+    try {
+      const params = new URLSearchParams();
+      params.set('user_id', userId);
+      params.set('page_size', '20'); // 只显示最近20条
+      
+      const res = await fetch(`/api/linjiaqi/credit-logs?${params.toString()}`, { credentials: 'include' });
+      const data = await res.json();
+      setSelectedUserCreditLogs(data.data || []);
+    } catch (error) {
+      console.error('Error fetching user credit logs:', error);
+      setSelectedUserCreditLogs([]);
+    }
+  };
+
   // 获取充值套餐列表
   const fetchPackages = async () => {
     try {
@@ -1582,6 +1599,8 @@ export default function AdminDashboard() {
       const data = await res.json();
       setSelectedUser(data.data);
       setShowUserDialog(true);
+      // #291 获取该用户的积分流水
+      fetchUserCreditLogs(id);
     } catch (error) {
       console.error('Error fetching user detail:', error);
     }
@@ -1670,8 +1689,10 @@ export default function AdminDashboard() {
     setShowDistributeDialog(false);
     
     try {
-      if (isAdmin || operation === 'deduct') {
-        // 管理员：划扣配额
+      // #291 修复：管理员也应该能正常使用 add/subtract 操作
+      // 只有 operation === 'deduct' 时才走划扣配额逻辑
+      if (operation === 'deduct') {
+        // 划扣配额：给负责人增加积分
         // #110 修复：添加 credentials: 'include' 确保请求携带 cookie
         const res = await fetch('/api/linjiaqi/distribute', {
           method: 'POST',
@@ -2023,10 +2044,6 @@ export default function AdminDashboard() {
             <TabsTrigger value="canvas-config" className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm">
               <Palette className="h-4 w-4" />
               画布配置
-            </TabsTrigger>
-            <TabsTrigger value="credit-logs" className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm">
-              <FileText className="h-4 w-4" />
-              积分流水
             </TabsTrigger>
           </TabsList>
 
@@ -3805,178 +3822,6 @@ export default function AdminDashboard() {
               </CardContent>
             </Card>
           </TabsContent>
-
-          {/* #271 积分流水 */}
-          <TabsContent value="credit-logs">
-            <Card className={`border ${adminDarkMode ? 'bg-gray-900/50 border-gray-800' : 'border-gray-200'}`}>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>积分流水</CardTitle>
-                    <p className="text-sm text-muted-foreground mt-1">所有积分变动记录（双式记账法）</p>
-                  </div>
-                  <Button variant="outline" onClick={() => fetchCreditLogs(creditLogsPagination.page)}>
-                    <RefreshCw className="h-4 w-4 mr-1" />
-                    刷新
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {/* 筛选条件 */}
-                <div className="flex flex-wrap gap-4 mb-4">
-                  <div className="flex items-center gap-2">
-                    <Label className="text-sm">用户ID:</Label>
-                    <Input
-                      className="w-40"
-                      placeholder="输入用户ID"
-                      value={creditLogsFilter.userId}
-                      onChange={(e) => setCreditLogsFilter({ ...creditLogsFilter, userId: e.target.value })}
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Label className="text-sm">类型:</Label>
-                    <select
-                      className={`px-3 py-2 rounded-lg border ${adminDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}
-                      value={creditLogsFilter.type}
-                      onChange={(e) => setCreditLogsFilter({ ...creditLogsFilter, type: e.target.value })}
-                    >
-                      <option value="all">全部</option>
-                      <option value="deduct">生成扣费(旧)</option>
-                      <option value="generate">生成扣费</option>
-                      <option value="refund">积分返还</option>
-                      <option value="recharge">卡密充值</option>
-                      <option value="admin_adjust">后台调整</option>
-                      <option value="exchange">积分兑换</option>
-                    </select>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Label className="text-sm">开始日期:</Label>
-                    <Input
-                      type="date"
-                      className="w-36"
-                      value={creditLogsFilter.startDate}
-                      onChange={(e) => setCreditLogsFilter({ ...creditLogsFilter, startDate: e.target.value })}
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Label className="text-sm">结束日期:</Label>
-                    <Input
-                      type="date"
-                      className="w-36"
-                      value={creditLogsFilter.endDate}
-                      onChange={(e) => setCreditLogsFilter({ ...creditLogsFilter, endDate: e.target.value })}
-                    />
-                  </div>
-                  <Button onClick={() => fetchCreditLogs(1)}>
-                    <Search className="h-4 w-4 mr-1" />
-                    查询
-                  </Button>
-                </div>
-
-                {/* 流水表格 */}
-                <div className="border rounded-lg overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>ID</TableHead>
-                        <TableHead>用户</TableHead>
-                        <TableHead>变动金额</TableHead>
-                        <TableHead>变动后余额</TableHead>
-                        <TableHead>类型</TableHead>
-                        <TableHead>关联ID</TableHead>
-                        <TableHead>描述</TableHead>
-                        <TableHead>时间</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {creditLogs.length > 0 ? creditLogs.map((log) => (
-                        <TableRow key={log.id}>
-                          <TableCell>{log.id}</TableCell>
-                          <TableCell>
-                            {log.users ? (
-                              <div className="flex items-center gap-2">
-                                <UserIcon className="h-4 w-4" />
-                                <span>{log.users.nickname}</span>
-                                <span className="text-gray-400 text-xs">({log.user_id?.slice(0, 8)}...)</span>
-                              </div>
-                            ) : (
-                              <span className="text-gray-500">{log.user_id?.slice(0, 8)}...</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <span className={`font-semibold ${log.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              {log.amount > 0 ? '+' : ''}{log.amount}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="secondary">{log.balance_after}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={
-                              log.type === 'generate' || log.type === 'deduct' ? 'destructive' :
-                              log.type === 'refund' ? 'default' :
-                              log.type === 'recharge' ? 'default' :
-                              log.type === 'admin_adjust' ? 'secondary' :
-                              'outline'
-                            }>
-                              {log.type === 'generate' || log.type === 'deduct' ? '生成扣费' :
-                               log.type === 'refund' ? '积分返还' :
-                               log.type === 'recharge' ? '卡密充值' :
-                               log.type === 'admin_adjust' ? '后台调整' :
-                               log.type === 'exchange' ? '积分兑换' :
-                               log.type}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="font-mono text-xs max-w-[150px] truncate" title={log.reference_id}>
-                            {log.reference_id || '-'}
-                          </TableCell>
-                          <TableCell className="max-w-[200px] truncate" title={log.description}>
-                            {log.description || '-'}
-                          </TableCell>
-                          <TableCell className="text-sm text-gray-500">
-                            {formatDate(log.created_at)}
-                          </TableCell>
-                        </TableRow>
-                      )) : (
-                        <TableRow>
-                          <TableCell colSpan={8} className="text-center py-8 text-gray-500">
-                            暂无积分流水记录
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-
-                {/* 分页 */}
-                {creditLogsPagination.totalPages > 1 && (
-                  <div className="flex items-center justify-between mt-4">
-                    <span className="text-sm text-gray-500">
-                      共 {creditLogsPagination.total} 条记录，第 {creditLogsPagination.page} / {creditLogsPagination.totalPages} 页
-                    </span>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={creditLogsPagination.page <= 1}
-                        onClick={() => fetchCreditLogs(creditLogsPagination.page - 1)}
-                      >
-                        上一页
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={creditLogsPagination.page >= creditLogsPagination.totalPages}
-                        onClick={() => fetchCreditLogs(creditLogsPagination.page + 1)}
-                      >
-                        下一页
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
         </Tabs>
 
         {/* API 配置编辑对话框 */}
@@ -4442,6 +4287,64 @@ export default function AdminDashboard() {
                     </Table>
                   ) : (
                     <p className="text-gray-500">暂无使用记录</p>
+                  )}
+                </div>
+
+                <Separator />
+
+                {/* #291 积分流水记录 */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-3">积分流水</h3>
+                  {selectedUserCreditLogs.length > 0 ? (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>变动金额</TableHead>
+                          <TableHead>变动后余额</TableHead>
+                          <TableHead>类型</TableHead>
+                          <TableHead>描述</TableHead>
+                          <TableHead>时间</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedUserCreditLogs.map((log) => (
+                          <TableRow key={log.id}>
+                            <TableCell>
+                              <span className={`font-semibold ${log.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {log.amount > 0 ? '+' : ''}{log.amount}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="secondary">{log.balance_after}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={
+                                log.type === 'generate' || log.type === 'deduct' ? 'destructive' :
+                                log.type === 'refund' ? 'default' :
+                                log.type === 'recharge' ? 'default' :
+                                log.type === 'admin_adjust' ? 'secondary' :
+                                'outline'
+                              }>
+                                {log.type === 'generate' || log.type === 'deduct' ? '生成扣费' :
+                                 log.type === 'refund' ? '积分返还' :
+                                 log.type === 'recharge' ? '卡密充值' :
+                                 log.type === 'admin_adjust' ? '后台调整' :
+                                 log.type === 'exchange' ? '积分兑换' :
+                                 log.type}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="max-w-[200px] truncate" title={log.description}>
+                              {log.description || '-'}
+                            </TableCell>
+                            <TableCell className="text-sm text-gray-500">
+                              {formatDate(log.created_at)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  ) : (
+                    <p className="text-gray-500">暂无积分流水记录</p>
                   )}
                 </div>
               </div>

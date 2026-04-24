@@ -183,6 +183,7 @@ exec_sql({ sql: "SELECT * FROM users" })
 | #288 | GET超时返还逻辑错误 | 数学结算逻辑替代状态统计 | ✅ 已修复 | **核心必读** |
 | #289 | 删除图片刷新后恢复 | 元素删除立即保存localStorage | ✅ 已修复 | |
 | #290 | 占位符像素密度低 | placeholderBaseSize /4 → /2 | ✅ 已修复 | |
+| #291 | 管理后台积分流水入口+减少变增加 | 删除独立Tab+修复distributeCredits逻辑 | ✅ 已修复 | |
 
 ---
 

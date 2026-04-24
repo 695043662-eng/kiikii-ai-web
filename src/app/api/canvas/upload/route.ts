@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { uploadToCOS, isCOSConfigured, checkBucketExists } from '@/lib/cos';
+import { validateUploadedFile } from '@/lib/file-validator';
 
 // 缓存 bucket 检查结果
 let bucketCheckCache: { exists: boolean; error?: string; timestamp: number } | null = null;
@@ -71,33 +72,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 验证文件类型
-    const allowedFormats = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-    if (!allowedFormats.includes(file.type)) {
+    // 🔒 安全增强：使用魔数验证文件真实类型
+    const validation = await validateUploadedFile(file);
+    if (!validation.valid) {
+      console.warn('[Canvas Upload] 安全拦截:', validation.error, '| 文件名:', file.name, '| 声明类型:', file.type);
       return NextResponse.json(
-        { success: false, error: '不支持的文件格式，仅支持 JPG、PNG、WebP、GIF' },
+        { success: false, error: validation.error || '文件验证失败' },
         { status: 400 }
       );
     }
 
+    // 使用检测到的真实 MIME 类型
+    const actualMimeType = validation.detectedType!.mime;
+    const actualExt = validation.detectedType!.ext;
+
     console.log('[Canvas Upload] 开始上传到 COS:', {
       name: file.name,
       size: (file.size / 1024 / 1024).toFixed(2) + 'MB',
-      type: file.type,
+      declaredType: file.type,
+      actualType: actualMimeType,
     });
 
     // 读取文件内容
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // 生成存储路径：canvas/年月/UUID-原文件名
+    // 生成存储路径：canvas/年月/UUID.真实扩展名
     const timestamp = Date.now();
     const uuid = Math.random().toString(36).substring(2, 15);
-    const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const key = `canvas/${new Date().toISOString().slice(0, 7)}/${timestamp}-${uuid}-${safeName}`;
+    const key = `canvas/${new Date().toISOString().slice(0, 7)}/${timestamp}-${uuid}.${actualExt}`;
 
-    // 上传到 COS
-    const result = await uploadToCOS(key, buffer, file.type);
+    // 上传到 COS（使用真实的 MIME 类型）
+    const result = await uploadToCOS(key, buffer, actualMimeType);
 
     console.log('[Canvas Upload] 上传成功:', {
       key: result.key,

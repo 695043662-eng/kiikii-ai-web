@@ -133,6 +133,7 @@
 | #272 | 管理后台积分流水查看入口 | 新增"积分流水"Tab + 筛选功能 + 分页 | ✅ 已修复 | 核心必读 |
 | #273 | 管理后台拖动排序弹回 | sort_order 映射错误 model.id → model.sort_order | ✅ 已修复 | |
 | #274 | 默认模型改为GPT Image 2 + 删除2K/4K | Context默认值 + inferParameters只返回1K | ✅ 已修复 | |
+| #275 | 安全漏洞：MIME伪造+SSRF+execSync | 魔数验证+URL白名单+移除child_process | ✅ 已修复 | 安全核心 |
 
 ---
 
@@ -3175,6 +3176,175 @@ if (existingMd5s.includes(result.md5)) {
 - `src/app/generate/page.tsx`
   - handleRegenerate 函数开头强制清空所有 State 和 Ref
   - 简化后续逻辑，删除重复清空代码
+
+### 状态
+✅ 已修复
+
+---
+
+## #275 - 安全漏洞修复：MIME伪造 + SSRF + execSync（CRITICAL）⚠️ 安全核心
+
+**问题描述**：
+服务器遭到黑客入侵，发现以下安全漏洞：
+1. 文件上传接口仅检查 `file.type`（由客户端提供，可伪造）
+2. 图片代理接口无域名白名单限制，存在 SSRF 风险
+3. `fileLock.ts` 使用 `execSync('sleep 0.01')` 执行系统命令
+
+**漏洞详情**：
+
+### 漏洞 1：MIME Type 伪造（高危）
+**位置**：`src/app/api/canvas/upload/route.ts:75-81`
+
+**漏洞代码**：
+```typescript
+// 只检查 file.type（可被黑客伪造！）
+const allowedFormats = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+if (!allowedFormats.includes(file.type)) { ... }
+```
+
+**攻击方式**：
+```bash
+curl -X POST https://your-site.com/api/canvas/upload \
+  -F "file=@shell.sh;type=image/jpeg"  # 伪装成 JPEG
+```
+
+### 漏洞 2：SSRF 攻击（高危）
+**位置**：`src/app/api/proxy-image/route.ts:85`
+
+**漏洞代码**：
+```typescript
+// 直接 fetch 用户提供的 URL，无任何限制！
+const response = await fetch(imageUrl, { ... });
+```
+
+**攻击方式**：
+```bash
+# 访问云服务元数据，窃取敏感信息
+curl "https://your-site.com/api/proxy-image?url=http://169.254.169.254/latest/meta-data/"
+```
+
+### 漏洞 3：execSync 执行系统命令（中危）
+**位置**：`src/lib/fileLock.ts:64`
+
+**漏洞代码**：
+```typescript
+require('child_process').execSync('sleep 0.01');
+```
+
+**修复方案**：
+
+### 1. 新增魔数验证工具（src/lib/file-validator.ts）
+```typescript
+// 通过文件前几个字节的特征值验证真实类型
+export function detectFileType(buffer: Buffer): { mime: string; ext: string } | null {
+  // JPEG: FF D8 FF
+  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return { mime: 'image/jpeg', ext: 'jpg' };
+  }
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (buffer[0] === 0x89 && buffer[1] === 0x50 && ...) {
+    return { mime: 'image/png', ext: 'png' };
+  }
+  // ... 其他格式
+}
+
+export function validateImageFile(buffer: Buffer, declaredMime?: string): 
+  { valid: boolean; detectedType?: { mime: string; ext: string }; error?: string } {
+  const detectedType = detectFileType(buffer);
+  if (!detectedType) {
+    return { valid: false, error: '文件不是有效的图片格式' };
+  }
+  return { valid: true, detectedType };
+}
+```
+
+### 2. 新增 URL 验证工具（src/lib/url-validator.ts）
+```typescript
+// 域名白名单
+const ALLOWED_PROXY_DOMAINS = [
+  'cos.ap-hongkong.myqcloud.com',
+  'api.mmw.ink',
+  // ... 其他允许的域名
+];
+
+// 私有 IP 检测
+const PRIVATE_IP_RANGES = [
+  /^10\./,
+  /^172\.(1[6-9]|2[0-9]|3[0-1])\./,
+  /^192\.168\./,
+  /^127\./,
+  /^169\.254\./,
+];
+
+export function validateUrlSync(url: string): { valid: boolean; error?: string } {
+  // 1. 检查协议（只允许 http/https）
+  // 2. 检查是否为私有 IP
+  // 3. 检查域名白名单
+}
+```
+
+### 3. 修复文件上传接口
+**位置**：`src/app/api/canvas/upload/route.ts`
+
+```typescript
+import { validateUploadedFile } from '@/lib/file-validator';
+
+// 🔒 安全增强：使用魔数验证文件真实类型
+const validation = await validateUploadedFile(file);
+if (!validation.valid) {
+  return NextResponse.json({ success: false, error: validation.error }, { status: 400 });
+}
+
+// 使用检测到的真实 MIME 类型
+const actualMimeType = validation.detectedType!.mime;
+```
+
+### 4. 修复图片代理接口
+**位置**：`src/app/api/proxy-image/route.ts`
+
+```typescript
+import { validateUrlSync } from '@/lib/url-validator';
+
+// 🔒 安全增强：SSRF 防护
+const urlValidation = validateUrlSync(imageUrl);
+if (!urlValidation.valid) {
+  return NextResponse.json(
+    { error: 'URL 不在允许的白名单中，禁止访问' },
+    { status: 403 }
+  );
+}
+```
+
+### 5. 移除 execSync
+**位置**：`src/lib/fileLock.ts`
+
+```typescript
+// ❌ 旧代码
+require('child_process').execSync('sleep 0.01');
+
+// ✅ 新代码：使用纯 JavaScript 实现
+function syncWait(ms: number): void {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    // 忙等待（10ms 是可接受的）
+  }
+}
+```
+
+### 修改文件
+- `src/lib/file-validator.ts`：新增，魔数验证工具
+- `src/lib/url-validator.ts`：新增，URL 安全验证工具
+- `src/app/api/canvas/upload/route.ts`：使用魔数验证
+- `src/app/api/upload-reference/route.ts`：使用魔数验证
+- `src/app/api/canvas/upload-base64/route.ts`：使用魔数验证
+- `src/app/api/proxy-image/route.ts`：添加 SSRF 防护
+- `src/lib/fileLock.ts`：移除 execSync
+
+### 安全最佳实践
+1. **永远不要信任客户端数据**：`file.type`、`Content-Type` 都可被伪造
+2. **验证文件内容**：使用魔数（Magic Bytes）验证文件真实类型
+3. **限制网络请求**：添加域名白名单，禁止访问私有 IP
+4. **避免系统命令**：尽量不要使用 `exec`、`spawn` 等函数
 
 ### 状态
 ✅ 已修复

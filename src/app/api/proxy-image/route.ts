@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { downloadFromCOS, getSignedUrl } from '@/lib/cos';
+import { validateUrlSync } from '@/lib/url-validator';
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,6 +12,12 @@ export async function GET(request: NextRequest) {
     if (cosKey) {
       console.log('=== 通过 COS Key 获取图片 ===');
       console.log('COS Key:', cosKey);
+
+      // 🔒 安全增强：验证 COS key 格式（防止路径穿越）
+      if (cosKey.includes('..') || cosKey.startsWith('/') || cosKey.includes('//')) {
+        console.warn('[proxy-image] 安全拦截: 无效的 COS key');
+        return NextResponse.json({ error: 'Invalid COS key' }, { status: 400 });
+      }
 
       try {
         // 获取签名 URL
@@ -51,6 +58,16 @@ export async function GET(request: NextRequest) {
     // 原有的 URL 代理逻辑
     if (!imageUrl) {
       return NextResponse.json({ error: 'URL or key parameter is required' }, { status: 400 });
+    }
+
+    // 🔒 安全增强：SSRF 防护 - 验证 URL
+    const urlValidation = validateUrlSync(imageUrl);
+    if (!urlValidation.valid) {
+      console.warn('[proxy-image] 安全拦截 - SSRF 防护:', urlValidation.error, '| URL:', imageUrl.substring(0, 100));
+      return NextResponse.json(
+        { error: 'URL 不在允许的白名单中，禁止访问' },
+        { status: 403 }
+      );
     }
 
     console.log('=== 代理图片请求 ===');

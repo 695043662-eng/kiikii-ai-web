@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { uploadToCOS, isCOSConfigured } from '@/lib/cos';
+import { validateBase64Image } from '@/lib/file-validator';
 
 /**
  * 上传 base64 图片到 COS
@@ -42,29 +43,26 @@ export async function POST(request: NextRequest) {
     for (let i = 0; i < images.length; i++) {
       const base64Data = images[i];
 
-      // 提取 base64 数据（去掉 data:image/xxx;base64, 前缀）
-      let base64Content = base64Data;
-      let mimeType = 'image/png';
+      // 🔒 安全增强：使用魔数验证文件真实类型
+      const validation = validateBase64Image(base64Data);
 
-      if (base64Data.includes(',')) {
-        const [prefix, content] = base64Data.split(',');
-        base64Content = content;
-
-        // 从前缀中提取 MIME 类型
-        const mimeMatch = prefix.match(/data:(image\/[^;]+);/);
-        if (mimeMatch) {
-          mimeType = mimeMatch[1];
-        }
+      if (!validation.valid) {
+        console.warn(`[Upload Base64] 图片 ${i} 安全拦截:`, validation.error);
+        continue;
       }
 
-      // 验证 MIME 类型
-      const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-      if (!allowedMimeTypes.includes(mimeType)) {
-        mimeType = 'image/png'; // 默认使用 PNG
+      if (!validation.buffer) {
+        console.warn(`[Upload Base64] 图片 ${i} Buffer 为空`);
+        continue;
       }
 
-      // 计算 base64 大小（大约）
-      const sizeInBytes = Math.ceil(base64Content.length * 0.75);
+      // 使用验证后的真实 MIME 类型和扩展名
+      const actualMimeType = validation.detectedType!.mime;
+      const actualExt = validation.detectedType!.ext;
+      const buffer = validation.buffer;
+
+      // 检查文件大小
+      const sizeInBytes = buffer.length;
       const maxSize = 20 * 1024 * 1024; // 20MB
 
       if (sizeInBytes > maxSize) {
@@ -72,23 +70,19 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      // 转换 base64 为 Buffer
-      const buffer = Buffer.from(base64Content, 'base64');
-
-      // 生成存储路径
+      // 生成存储路径（使用真实的扩展名）
       const timestamp = Date.now();
       const uuid = Math.random().toString(36).substring(2, 15);
-      const ext = mimeType.split('/')[1] || 'png';
-      const key = `canvas/split/${new Date().toISOString().slice(0, 7)}/${timestamp}-${uuid}-${i}.${ext}`;
+      const key = `canvas/split/${new Date().toISOString().slice(0, 7)}/${timestamp}-${uuid}-${i}.${actualExt}`;
 
-      // 上传到 COS
+      // 上传到 COS（使用真实的 MIME 类型）
       try {
-        const result = await uploadToCOS(key, buffer, mimeType);
+        const result = await uploadToCOS(key, buffer, actualMimeType);
         results.push({
           key: result.key,
           url: result.url,
         });
-        console.log(`[Upload Base64] 图片 ${i} 上传成功: ${result.key}`);
+        console.log(`[Upload Base64] 图片 ${i} 上传成功: ${result.key}, 类型: ${actualMimeType}`);
       } catch (uploadError) {
         console.error(`[Upload Base64] 图片 ${i} 上传失败:`, uploadError);
       }

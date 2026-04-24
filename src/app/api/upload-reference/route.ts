@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { uploadToCOS, getSignedUrl, checkBucketExists, isCOSConfigured, COS_CONFIG } from '@/lib/cos';
+import { validateUploadedFile } from '@/lib/file-validator';
 
 // 缓存 bucket 检查结果
 let bucketCheckCache: { exists: boolean; error?: string; timestamp: number } | null = null;
@@ -73,7 +74,7 @@ export async function POST(request: NextRequest) {
     console.log('=== 上传参考图到腾讯云 COS ===');
     console.log('文件名:', file.name);
     console.log('文件大小:', (file.size / 1024 / 1024).toFixed(2), 'MB');
-    console.log('文件类型:', file.type);
+    console.log('声明类型:', file.type);
 
     // 检查文件大小（最大 50MB）
     const maxSize = 50 * 1024 * 1024;
@@ -85,36 +86,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 验证文件类型
-    const allowedFormats = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-    if (!allowedFormats.includes(file.type)) {
-      console.log('拒绝上传: 不支持的格式', file.type);
+    // 🔒 安全增强：使用魔数验证文件真实类型
+    const validation = await validateUploadedFile(file);
+    if (!validation.valid) {
+      console.warn('[Upload Reference] 安全拦截:', validation.error, '| 文件名:', file.name, '| 声明类型:', file.type);
       return NextResponse.json(
-        { success: false, error: `不支持的图片格式（${file.type || '未知'}），仅支持 JPG/PNG/WebP/GIF` },
+        { success: false, error: validation.error || '文件验证失败' },
         { status: 400 }
       );
     }
+
+    // 使用检测到的真实 MIME 类型和扩展名
+    const actualMimeType = validation.detectedType!.mime;
+    const actualExt = validation.detectedType!.ext;
 
     // 将文件转换为 Buffer
     console.log('开始读取文件 buffer...');
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    console.log('Buffer 大小:', buffer.length, 'bytes, 耗时:', Date.now() - startTime, 'ms');
+    console.log('Buffer 大小:', buffer.length, 'bytes, 真实类型:', actualMimeType, ', 耗时:', Date.now() - startTime, 'ms');
 
-    // 根据文件类型确定扩展名
-    const extMap: Record<string, string> = {
-      'image/jpeg': 'jpg',
-      'image/png': 'png',
-      'image/webp': 'webp',
-      'image/gif': 'gif',
-    };
-    const ext = extMap[file.type] || 'jpg';
-    const key = `reference-images/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    // 生成存储路径（使用真实的扩展名）
+    const key = `reference-images/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${actualExt}`;
 
-    // 上传到腾讯云 COS
+    // 上传到腾讯云 COS（使用真实的 MIME 类型）
     try {
       console.log('开始上传到腾讯云 COS...');
-      await uploadToCOS(key, buffer, file.type);
+      await uploadToCOS(key, buffer, actualMimeType);
       console.log('上传成功，Key:', key, ', 耗时:', Date.now() - startTime, 'ms');
     } catch (e: any) {
       console.error('上传到 COS 失败:', e);

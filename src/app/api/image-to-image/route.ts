@@ -1474,6 +1474,9 @@ export async function GET(request: NextRequest) {
     Date.now() - result.createdAt > 60 * 1000
   );
   
+  // #284 新增：超时积分返还阈值（5 分钟）
+  const REFUND_TIMEOUT_MS = 5 * 60 * 1000;
+  
   if (shouldCheckDatabase) {
     console.log(`[GET] 任务 ${taskId} ${result ? '超时检查' : '缓存不存在'}，查询数据库...`);
     
@@ -1595,6 +1598,74 @@ export async function GET(request: NextRequest) {
       ...item,
       imageKey: item.key,  // 添加 imageKey 字段
     }));
+  }
+
+  // #284 新增：超时积分返还机制
+  // 当任务超过 5 分钟还是 generating 状态时，标记为失败并返还积分
+  if (result.status === 'generating' && Date.now() - result.createdAt > REFUND_TIMEOUT_MS) {
+    console.log(`[GET] #284 任务 ${taskId} 超过 5 分钟未完成，触发积分返还`);
+    
+    const generationCount = result.requestParams?.generationCount || result.imageItems?.length || 4;
+    const imageItems = result.imageItems || Array.from({ length: generationCount }, (_, idx) => ({
+      index: idx,
+      url: null,
+      key: null,
+      status: 'generating' as const,
+      error: null,
+    }));
+    
+    // 标记所有未完成的图片为失败
+    const updatedImageItems = imageItems.map(item => {
+      if (item.status === 'generating') {
+        return { ...item, status: 'failed' as const, error: '任务超时' };
+      }
+      return item;
+    });
+    
+    // 检查是否需要返还积分
+    const userId = result.requestParams?.userId;
+    const creditsPerImage = result.requestParams?.creditsPerImage || 0;
+    const failedCount = updatedImageItems.filter(i => i.status === 'failed').length;
+    
+    if (userId && creditsPerImage > 0 && failedCount > 0) {
+      try {
+        const refundResult = await handlePartialRefund(
+          getTaskResult,
+          setTaskResult,
+          taskId,
+          updatedImageItems,
+          generationCount,
+          creditsPerImage,
+          userId,
+          'GET接口超时返还'
+        );
+        
+        if (refundResult.success) {
+          console.log(`[GET] #284 超时返还成功: 退还 ${refundResult.refundAmount} 积分，剩余 ${refundResult.newBalance}`);
+        }
+      } catch (err) {
+        console.error(`[GET] #284 超时返还失败:`, err);
+      }
+    }
+    
+    // 更新任务状态
+    const hasSuccessfulImages = updatedImageItems.some(i => i.status === 'completed');
+    setTaskResult(taskId, {
+      ...result,
+      status: hasSuccessfulImages ? 'completed' : 'failed',
+      imageItems: updatedImageItems,
+      completedAt: Date.now(),
+    });
+    
+    // 更新 result 变量，以便后续使用
+    result = {
+      ...result,
+      status: hasSuccessfulImages ? 'completed' : 'failed',
+      imageItems: updatedImageItems,
+      completedAt: Date.now(),
+    };
+    
+    console.log(`[GET] #284 任务 ${taskId} 已标记为 ${result.status}，${failedCount} 张图片失败`);
   }
 
   // 计算 completedCount（用于前端进度显示）

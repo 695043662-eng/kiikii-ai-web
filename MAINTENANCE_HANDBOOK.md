@@ -176,6 +176,7 @@ exec_sql({ sql: "SELECT * FROM users" })
 | #281 | 熔断器阈值太低 | failureThreshold: 5 → 10 | ✅ 已修复 | 核心必读 |
 | #282 | 积分返还逻辑分散导致漏返 | 统一 handlePartialRefund 函数 | ✅ 已修复 | **核心必读** |
 | #283 | Webhook积分返还未await | 改为await等待返还完成 | ✅ 已修复 | **核心必读** |
+| #284 | GET接口超时未返还积分 | 5分钟超时检测 + 自动返还机制 | ✅ 已修复 | **核心必读** |
 
 ---
 
@@ -4806,6 +4807,119 @@ case 'timeout':  // ✅ 新增 timeout 事件处理
   - 第 102 行：GenError 类型新增 'timeout'
   - 第 885-920 行：error/timeout 事件处理积分更新
 
+---
+
+## #284 GET 接口超时未返还积分（CRITICAL）
+
+**发现时间**：2026-04-24
+
+**问题现象**：
+- 任务 `1777036525034` 扣除 18 积分
+- 任务状态一直是 `generating`
+- 前端持续轮询，但任务从未完成
+- **积分未返还**
+
+**根因分析**：
+GET 接口在任务超时（状态一直是 generating）时，只是返回当前状态，**没有触发积分返还**！
+
+```
+[GET] 任务 1777036525034 超时检查，查询数据库...
+[GET] 数据库中也没有任务 1777036525034
+// ❌ 没有积分返还逻辑！
+```
+
+**漏洞位置**：`src/app/api/image-to-image/route.ts` GET 方法
+
+**问题代码**：
+```typescript
+// ❌ 超时后只是查询数据库，没有返还积分
+if (shouldCheckDatabase) {
+  const { data, error } = await client
+    .from('generation_records')
+    .select('*')
+    .eq('task_id', taskId)
+    .maybeSingle();
+  
+  if (!data) {
+    console.log(`[GET] 数据库中也没有任务 ${taskId}`);
+    // ❌ 直接返回，没有返还积分！
+  }
+}
+```
+
+**修复方案**：
+当任务超过 5 分钟还是 `generating` 状态时：
+1. 标记所有未完成的图片为 `failed`
+2. 触发积分返还（`handlePartialRefund`）
+3. 更新任务状态为 `completed` 或 `failed`
+
+**修复代码**：
+```typescript
+// #284 新增：超时积分返还机制
+const REFUND_TIMEOUT_MS = 5 * 60 * 1000;  // 5 分钟
+
+if (result.status === 'generating' && Date.now() - result.createdAt > REFUND_TIMEOUT_MS) {
+  console.log(`[GET] #284 任务 ${taskId} 超过 5 分钟未完成，触发积分返还`);
+  
+  // 标记所有未完成的图片为失败
+  const updatedImageItems = imageItems.map(item => {
+    if (item.status === 'generating') {
+      return { ...item, status: 'failed' as const, error: '任务超时' };
+    }
+    return item;
+  });
+  
+  // 触发积分返还
+  if (userId && creditsPerImage > 0 && failedCount > 0) {
+    const refundResult = await handlePartialRefund(
+      getTaskResult,
+      setTaskResult,
+      taskId,
+      updatedImageItems,
+      generationCount,
+      creditsPerImage,
+      userId,
+      'GET接口超时返还'
+    );
+    
+    if (refundResult.success) {
+      console.log(`[GET] #284 超时返还成功: 退还 ${refundResult.refundAmount} 积分`);
+    }
+  }
+  
+  // 更新任务状态
+  setTaskResult(taskId, {
+    ...result,
+    status: hasSuccessfulImages ? 'completed' : 'failed',
+    imageItems: updatedImageItems,
+    completedAt: Date.now(),
+  });
+}
+```
+
+**补偿操作**：
+为任务 `1777036525034` 手动返还 18 积分：
+```sql
+-- 查询用户积分
+SELECT credits FROM users WHERE id = '5bb66162-29de-4839-8726-54d217663506';
+
+-- 返还积分
+UPDATE users SET credits = credits + 18 WHERE id = '5bb66162-29de-4839-8726-54d217663506';
+
+-- 记录日志
+INSERT INTO credit_logs (user_id, type, amount, reference_id, created_at)
+VALUES ('5bb66162-29de-4839-8726-54d217663506', 'refund', 18, '1777036525034', NOW());
+```
+
+**修改文件**：
+- `src/app/api/image-to-image/route.ts`
+  - 第 1477 行：新增 `REFUND_TIMEOUT_MS` 常量
+  - 第 1600-1660 行：新增超时积分返还逻辑
+
+**教训总结**：
+1. **幽灵任务是积分返还的最大漏洞**：任务卡在 `generating` 状态，前端轮询永远得不到结果，积分也不返还
+2. **GET 接口必须有兜底机制**：不能只查询状态，还要处理超时场景
+3. **积分返还必须在所有可能的失败路径上触发**：SSE 超时、Webhook 失败、GET 超时
 ### 状态
 ✅ 已修复
 

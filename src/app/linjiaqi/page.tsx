@@ -4155,7 +4155,7 @@ export default function AdminDashboard() {
 
         {/* 用户详情对话框 */}
         <Dialog open={showUserDialog} onOpenChange={setShowUserDialog}>
-          <DialogContent className="w-[95vw] max-w-none max-h-[90vh] overflow-y-auto">
+          <DialogContent className="!max-w-[95vw] w-[95vw] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>用户详情</DialogTitle>
             </DialogHeader>

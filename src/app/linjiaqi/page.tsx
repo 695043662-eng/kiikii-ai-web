@@ -4155,7 +4155,7 @@ export default function AdminDashboard() {
 
         {/* 用户详情对话框 */}
         <Dialog open={showUserDialog} onOpenChange={setShowUserDialog}>
-          <DialogContent className="!max-w-[95vw] w-[95vw] max-h-[90vh] overflow-y-auto">
+          <DialogContent className="!max-w-[71vw] w-[71vw] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>用户详情</DialogTitle>
             </DialogHeader>
@@ -4218,12 +4218,14 @@ export default function AdminDashboard() {
                       <TableBody>
                         {selectedUser.rechargeRecords.map((record) => (
                           <TableRow key={record.id}>
-                            <TableCell className="text-green-600">¥{(record.amount / 100).toFixed(2)}</TableCell>
-                            <TableCell>+{record.points}</TableCell>
+                            <TableCell className="text-green-600 font-semibold">¥{(record.amount / 100).toFixed(2)}</TableCell>
+                            <TableCell className="font-semibold">+{record.points}</TableCell>
                             <TableCell>
-                              {record.payment_method === 'alipay' ? '支付宝' : 
-                               record.payment_method === 'wechat' ? '微信' : 
+                              {/* #292 来源区分：在线充值、兑换码、手动充值 */}
+                              {record.payment_method === 'alipay' ? '在线充值' : 
+                               record.payment_method === 'wechat' ? '在线充值' : 
                                record.payment_method === 'redeem' ? '兑换码' :
+                               record.payment_method === 'manual' ? '手动充值' :
                                record.payment_method || '-'}
                             </TableCell>
                             <TableCell>{formatDate(record.created_at)}</TableCell>
@@ -4241,74 +4243,102 @@ export default function AdminDashboard() {
                 {/* 积分流水 */}
                 <div>
                   <h3 className="text-lg font-semibold mb-3">积分流水</h3>
-                  {selectedUserCreditLogs.length > 0 ? (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>变动前余额</TableHead>
-                          <TableHead>变动金额</TableHead>
-                          <TableHead>变动后余额</TableHead>
-                          <TableHead>类型</TableHead>
-                          <TableHead>来源</TableHead>
-                          <TableHead>描述</TableHead>
-                          <TableHead>时间</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {selectedUserCreditLogs.map((log) => (
-                          <TableRow key={log.id}>
-                            <TableCell>
-                              <Badge variant="outline">{log.balance_after - log.amount}</Badge>
-                            </TableCell>
-                            <TableCell>
-                              <span className={`font-semibold ${log.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                {log.amount > 0 ? '+' : ''}{log.amount}
-                              </span>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="secondary">{log.balance_after}</Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant={
-                                log.type === 'generate' || log.type === 'deduct' ? 'destructive' :
-                                log.type === 'refund' ? 'default' :
-                                log.type === 'recharge' ? 'default' :
-                                log.type === 'admin_adjust' ? 'secondary' :
-                                log.type === 'exchange' ? 'outline' :
-                                log.type === 'redeem' ? 'outline' :
-                                'outline'
-                              }>
-                                {log.type === 'generate' || log.type === 'deduct' ? '生成扣费' :
-                                 log.type === 'refund' ? '积分返还' :
-                                 log.type === 'recharge' ? '充值' :
-                                 log.type === 'admin_adjust' ? (log.amount > 0 ? '手动添加' : '手动减少') :
-                                 log.type === 'exchange' ? '积分兑换' :
-                                 log.type === 'redeem' ? '兑换码兑换' :
-                                 log.type}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              {log.type === 'recharge' ? (log.payment_method === 'alipay' ? '支付宝充值' : log.payment_method === 'wechat' ? '微信充值' : '在线充值') :
-                               log.type === 'redeem' ? '兑换码兑换' :
-                               log.type === 'admin_adjust' ? '后台操作' :
-                               log.type === 'generate' || log.type === 'deduct' ? 'AI生成' :
-                               log.type === 'refund' ? '系统返还' :
-                               log.type === 'exchange' ? '积分兑换' :
-                               '-'}
-                            </TableCell>
-                            <TableCell className="max-w-[200px] truncate" title={log.description}>
-                              {log.description || '-'}
-                            </TableCell>
-                            <TableCell className="text-sm text-gray-500">
-                              {formatDate(log.created_at)}
-                            </TableCell>
+                  {(() => {
+                    if (selectedUserCreditLogs.length === 0) {
+                      return <p className="text-gray-500">暂无积分流水记录</p>;
+                    }
+                    // #292 变动前余额逻辑：
+                    // 1. 按时间正序排列（最旧在前）
+                    // 2. 第1条的变动前余额 = balance_after - amount
+                    // 3. 后续每条的变动前余额 = 上一条的 balance_after
+                    // 4. 以 balance_after 为基准验证：变动前余额 + amount === balance_after
+                    // 5. 不等则触发数值警告
+                    const sorted = [...selectedUserCreditLogs].sort((a, b) => 
+                      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+                    );
+                    const enriched = sorted.map((log, idx) => {
+                      const balanceBefore = idx === 0 
+                        ? log.balance_after - log.amount 
+                        : sorted[idx - 1].balance_after;
+                      const expected = balanceBefore + log.amount;
+                      const hasWarning = expected !== log.balance_after;
+                      return { ...log, balanceBefore, hasWarning };
+                    });
+                    // 显示时恢复倒序（最新在前）
+                    const display = [...enriched].reverse();
+                    
+                    return (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>变动前余额</TableHead>
+                            <TableHead>变动金额</TableHead>
+                            <TableHead>变动后余额</TableHead>
+                            <TableHead>类型</TableHead>
+                            <TableHead>来源</TableHead>
+                            <TableHead>描述</TableHead>
+                            <TableHead>时间</TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  ) : (
-                    <p className="text-gray-500">暂无积分流水记录</p>
-                  )}
+                        </TableHeader>
+                        <TableBody>
+                          {display.map((log) => (
+                            <TableRow key={log.id} className={log.hasWarning ? 'bg-red-50' : ''}>
+                              <TableCell>
+                                <Badge variant="outline">{log.balanceBefore}</Badge>
+                              </TableCell>
+                              <TableCell>
+                                <span className={`font-semibold ${log.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {log.amount > 0 ? '+' : ''}{log.amount}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="secondary">{log.balance_after}</Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={
+                                  log.type === 'generate' || log.type === 'deduct' ? 'destructive' :
+                                  log.type === 'refund' ? 'default' :
+                                  log.type === 'recharge' ? 'default' :
+                                  log.type === 'admin_adjust' ? 'secondary' :
+                                  log.type === 'exchange' ? 'outline' :
+                                  log.type === 'redeem' ? 'outline' :
+                                  'outline'
+                                }>
+                                  {log.type === 'generate' || log.type === 'deduct' ? '生成扣费' :
+                                   log.type === 'refund' ? '积分返还' :
+                                   log.type === 'recharge' ? '充值' :
+                                   log.type === 'admin_adjust' ? (log.amount > 0 ? '手动添加' : '手动减少') :
+                                   log.type === 'exchange' ? '积分兑换' :
+                                   log.type === 'redeem' ? '兑换码兑换' :
+                                   log.type}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                {log.type === 'recharge' ? '在线充值' :
+                                 log.type === 'redeem' ? '兑换码' :
+                                 log.type === 'admin_adjust' ? '手动充值' :
+                                 log.type === 'generate' || log.type === 'deduct' ? 'AI生成' :
+                                 log.type === 'refund' ? '系统返还' :
+                                 log.type === 'exchange' ? '积分兑换' :
+                                 '-'}
+                              </TableCell>
+                              <TableCell className="max-w-[200px] truncate" title={log.description}>
+                                {log.description || '-'}
+                              </TableCell>
+                              <TableCell className="text-sm text-gray-500">
+                                {formatDate(log.created_at)}
+                                {log.hasWarning && (
+                                  <span className="ml-1 text-red-500 font-bold" title={`数值异常：${log.balanceBefore} + ${log.amount} = ${log.balanceBefore + log.amount}，实际变动后余额 ${log.balance_after}`}>
+                                    ⚠️
+                                  </span>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    );
+                  })()}
                 </div>
               </div>
             )}

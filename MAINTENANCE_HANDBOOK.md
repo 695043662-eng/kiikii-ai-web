@@ -180,6 +180,7 @@ exec_sql({ sql: "SELECT * FROM users" })
 | #285 | 并发请求导致重复返还 | 数据库唯一约束 + on_conflict参数 | ✅ 已修复 | **核心必读** |
 | #286 | refundCredits 并发安全 | 先插入日志再更新积分 + 唯一约束检测 | ✅ 已修复 | **核心必读** |
 | #287 | 生图发送到画布缺少 imageKey | sessionStorage 传递 imageKey + 画布读取使用 | ✅ 已修复 | **核心必读** |
+| #288 | GET超时返还逻辑错误 | 数学结算逻辑替代状态统计 | ✅ 已修复 | **核心必读** |
 
 ---
 
@@ -5109,3 +5110,71 @@ addSingleImageToCanvas(imageUrl, imageKey || null, prompt || '');
 ### 状态
 ✅ 已修复
 
+---
+
+## #288 GET 超时返还逻辑错误（CRITICAL）
+
+**发现时间**：2026-04-24
+
+**问题现象**：
+多个任务返还金额不正确：
+- 任务 1777041404664：扣 30 返 12（应返还 30）
+- 任务 1777039568766：扣 30 返 12（应返还 30）
+- 任务 1777036521957：扣 30 返 24（应返还 30）
+- 任务 1777032224715：扣 30 返 18（应返还 30）
+
+**根因分析**：
+GET 接口超时返还使用 **状态统计逻辑**，而非 **数学结算逻辑**：
+
+```javascript
+// ❌ 错误逻辑：遍历 imageItems 统计 generating 状态数量
+const failedCount = updatedImageItems.filter(i => i.status === 'failed').length;
+const refundAmount = failedCount * creditsPerImage;
+
+// 问题：
+// 1. imageItems 状态可能不准确（SSE 推送了 completed 但数据库没同步）
+// 2. 有些图片被标记为 completed 但实际没有成功
+// 3. 导致返还金额错误
+```
+
+**修复方案**（军师建议）：
+使用 **数学结算逻辑**，以预扣金额为基准：
+
+```javascript
+// ✅ 正确逻辑：数学结算
+// 1. 获取预扣金额（这是债务总额）
+const creditsCharged = result.requestParams?.creditsCharged || (generationCount * creditsPerImage);
+
+// 2. 统计真正"落袋为安"的成功数（必须是有图且状态为 completed）
+const successCount = imageItems.filter(item => 
+  item.status === 'completed' && item.url && item.url.startsWith('http')
+).length;
+
+// 3. 计算应返还金额（未完成的全部退回）
+const expectedRefund = creditsCharged - (successCount * creditsPerImage);
+
+// 4. 返还
+if (expectedRefund > 0) {
+  await handlePartialRefund(...);
+}
+```
+
+**优势**：
+1. **容错性强**：不管状态是什么，只看"有没有成功出图"
+2. **数据一致性**：以预扣金额为基准，保证"预扣 - 消耗 = 退还"永远成立
+3. **修复 Ghost 任务**：能解决 unknown 状态导致的坏账
+
+**修改文件**：
+- `src/app/api/image-to-image/route.ts`
+  - 第 828 行：setTaskResult 添加 creditsCharged 字段
+  - 第 1595-1680 行：GET 接口超时返还逻辑改为数学结算
+- `src/lib/taskResultsCache.ts`
+  - requestParams 类型添加 creditsCharged 字段
+
+**补偿操作**：
+已补偿 54 积分（18+18+6+12），记录 reference_id: compensation-2026-04-24-01
+
+---
+
+### 状态
+✅ 已修复

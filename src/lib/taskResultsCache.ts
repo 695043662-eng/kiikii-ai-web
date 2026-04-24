@@ -29,6 +29,7 @@ export interface TaskResult {
     aspectRatio: string;
     generationCount: number;
     creditsPerImage?: number;
+    creditsCharged?: number;  // #288 新增：总扣费金额（用于超时返还计算）
     urls?: string[];
     // #244 新增：参考图相关字段（用于历史记录恢复）
     referenceImageMd5s?: string[];

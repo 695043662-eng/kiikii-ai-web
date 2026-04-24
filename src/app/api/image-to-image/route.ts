@@ -838,6 +838,7 @@ export async function POST(request: NextRequest) {
         aspectRatio: aspectRatio,
         generationCount: generationCount,
         creditsPerImage: creditsPerImage,
+        creditsCharged: totalCredits,  // #288 新增：存储总扣费金额，用于超时返还计算
         urls: requestBody.urls,
         // #244 新增：存储参考图 MD5，用于历史记录恢复
         referenceImageMd5s: md5Hashes,
@@ -1600,10 +1601,10 @@ export async function GET(request: NextRequest) {
     }));
   }
 
-  // #284 新增：超时积分返还机制
+  // #284/#288 超时积分返还机制（数学结算逻辑）
   // 当任务超过 5 分钟还是 generating 状态时，标记为失败并返还积分
   if (result.status === 'generating' && Date.now() - result.createdAt > REFUND_TIMEOUT_MS) {
-    console.log(`[GET] #284 任务 ${taskId} 超过 5 分钟未完成，触发积分返还`);
+    console.log(`[GET] #288 任务 ${taskId} 超过 5 分钟未完成，触发数学结算返还`);
     
     const generationCount = result.requestParams?.generationCount || result.imageItems?.length || 4;
     const imageItems = result.imageItems || Array.from({ length: generationCount }, (_, idx) => ({
@@ -1614,20 +1615,35 @@ export async function GET(request: NextRequest) {
       error: null,
     }));
     
-    // 标记所有未完成的图片为失败
+    // #288 军师建议：使用数学结算逻辑
+    // 1. 获取预扣金额（这是债务总额）
+    const creditsCharged = result.requestParams?.creditsCharged || (generationCount * (result.requestParams?.creditsPerImage || 6));
+    
+    // 2. 统计真正"落袋为安"的成功数（必须是有图且状态为 completed）
+    const successCount = imageItems.filter(item => 
+      item.status === 'completed' && item.url && item.url.startsWith('http')
+    ).length;
+    
+    // 3. 计算应返还金额（未完成的全部退回）
+    const creditsPerImage = result.requestParams?.creditsPerImage || (creditsCharged / generationCount);
+    const expectedRefund = creditsCharged - (successCount * creditsPerImage);
+    
+    console.log(`[GET] #288 数学结算: 预扣=${creditsCharged}, 成功=${successCount}张, 应返还=${expectedRefund}`);
+    
+    // 4. 标记所有非 completed 的图片为 failed
     const updatedImageItems = imageItems.map(item => {
-      if (item.status === 'generating') {
-        return { ...item, status: 'failed' as const, error: '任务超时' };
+      if (item.status === 'completed' && item.url) {
+        return item;  // 保持成功状态
       }
-      return item;
+      return { ...item, status: 'failed' as const, error: '任务超时' };
     });
     
-    // 检查是否需要返还积分
-    const userId = result.requestParams?.userId;
-    const creditsPerImage = result.requestParams?.creditsPerImage || 0;
     const failedCount = updatedImageItems.filter(i => i.status === 'failed').length;
     
-    if (userId && creditsPerImage > 0 && failedCount > 0) {
+    // 5. 如果有欠账，调用返还
+    const userId = result.requestParams?.userId;
+    
+    if (userId && expectedRefund > 0 && !result.creditsRefunded) {
       try {
         const refundResult = await handlePartialRefund(
           getTaskResult,
@@ -1637,14 +1653,14 @@ export async function GET(request: NextRequest) {
           generationCount,
           creditsPerImage,
           userId,
-          'GET接口超时返还'
+          `GET超时结算：成功${successCount}张，退还${expectedRefund}分`
         );
         
         if (refundResult.success) {
-          console.log(`[GET] #284 超时返还成功: 退还 ${refundResult.refundAmount} 积分，剩余 ${refundResult.newBalance}`);
+          console.log(`[GET] #288 超时返还成功: 退还 ${refundResult.refundAmount} 积分，剩余 ${refundResult.newBalance}`);
         }
       } catch (err) {
-        console.error(`[GET] #284 超时返还失败:`, err);
+        console.error(`[GET] #288 超时返还失败:`, err);
       }
     }
     
@@ -1665,7 +1681,7 @@ export async function GET(request: NextRequest) {
       completedAt: Date.now(),
     };
     
-    console.log(`[GET] #284 任务 ${taskId} 已标记为 ${result.status}，${failedCount} 张图片失败`);
+    console.log(`[GET] #288 任务 ${taskId} 已标记为 ${result.status}，成功${successCount}张，失败${failedCount}张`);
   }
 
   // 计算 completedCount（用于前端进度显示）

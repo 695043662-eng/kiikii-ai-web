@@ -121,6 +121,7 @@
 | #260 | 新架构请求失败 "apikey is empty" | request_headers 缺少 Authorization header | ✅ 已修复 | 核心必读 |
 | #261 | gpt-image-2 返回结果为空 | 配置webhook+修改空结果检测逻辑 | ✅ 已修复 | 核心必读 |
 | #262 | 图片签名 URL 返回 403 | COS 客户端初始化时机问题 | ✅ 已修复 | 核心必读 |
+| #263 | webhook URL 硬编码开发环境域名 | 数据库占位符 + 环境变量动态读取 | ✅ 已修复 | 核心必读 |
 
 ---
 
@@ -3216,6 +3217,63 @@ if (existingMd5s.includes(result.md5)) {
   - 第 972-985 行：添加 `terminalTaskId` 检测分支
 - 数据库 `api_configs` 表 id=7
   - `request_body_template.webHook` 字段
+
+**状态**：✅ 已修复
+
+---
+
+### #263 - webhook URL 硬编码开发环境域名（CRITICAL）
+
+**问题描述**：
+- 数据库 `api_configs` 表 id=7 的 `webHook` 字段硬编码为开发环境域名
+- 硬编码值：`https://bd9ded72-ea5b-4143-a46a-3164cccc49a6.dev.coze.site/api/webhook/draw-callback`
+- 生产环境部署后，gpt-image-2 的 webhook 回调会发送到错误的地址
+- 导致生产环境无法收到生成结果
+
+**根因分析**：
+1. 初始配置时直接写了开发环境的完整 URL
+2. 没有考虑多环境部署（开发/生产）的场景
+3. 部署到生产环境后，webhook URL 仍然是开发环境地址
+
+**修复方案**：
+1. **数据库配置改为占位符**：
+   ```sql
+   UPDATE api_configs 
+   SET request_body_template = jsonb_set(
+     request_body_template, 
+     '{webHook}', 
+     '"${webhookBaseUrl}/api/webhook/draw-callback"'
+   )
+   WHERE id = 7;
+   ```
+
+2. **代码中传入环境变量**：
+   ```typescript
+   const variables = {
+     prompt: requestBody.prompt,
+     // ... 其他变量
+     webhookBaseUrl: process.env.WEBHOOK_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || 'https://kiikii.me',
+   };
+   ```
+
+**环境变量优先级**：
+1. `WEBHOOK_BASE_URL` - 专用 webhook 基础 URL（优先级最高）
+2. `NEXT_PUBLIC_SITE_URL` - 站点 URL（通用配置）
+3. 硬编码默认值 `https://kiikii.me`（兜底）
+
+**部署配置说明**：
+在 Vercel 或其他平台部署生产环境时，只需配置以下环境变量之一：
+```
+NEXT_PUBLIC_SITE_URL=https://kiikii.me
+```
+或
+```
+WEBHOOK_BASE_URL=https://kiikii.me
+```
+
+**修改文件**：
+- 数据库 `api_configs` 表 id=7 的 `request_body_template.webHook` 字段
+- `src/app/api/image-to-image/route.ts` 第 287-296 行
 
 **状态**：✅ 已修复
 

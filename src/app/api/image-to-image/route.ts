@@ -292,7 +292,8 @@ async function sendToTerminalInternal(
     referenceImages: requestBody.urls,  // GRS AI 用 ${referenceImages}
     urls: requestBody.urls,             // 通用变量
     model: requestBody.model,           // GRS AI 用 ${model}
-    // 🔧 删除 webhook：服务商走 SSE 流模式
+    // 🔧 #263 修复：webhook URL 使用环境变量，支持多环境部署
+    webhookBaseUrl: process.env.WEBHOOK_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || 'https://kiikii.me',
   };
 
   // 使用配置模板构建请求头和请求体

@@ -170,6 +170,7 @@ exec_sql({ sql: "SELECT * FROM users" })
 | #275 | 安全漏洞：MIME伪造+SSRF+execSync | 魔数验证+URL白名单+移除child_process | ✅ 已修复 | 安全核心 |
 | #276 | 生成失败积分返还不更新前端 | 双保险：后端await返还+前端timeout事件处理 | ✅ 已修复 | 核心必读 |
 | #277 | 管理后台拖动排序不生效+前端排序无效+默认模型 | 硬编码MODEL_SORT_ORDER覆盖+useSharedData默认值 | ✅ 已修复 | 核心必读 |
+| #278 | 积分双重返还（TOCTOU竞态） | refundCredits前必须重新getTaskResult+检查creditsRefunded | ✅ 已修复 | **核心必读** |
 
 ---
 
@@ -3215,6 +3216,80 @@ if (existingMd5s.includes(result.md5)) {
 
 ### 状态
 ✅ 已修复
+
+---
+
+## #278 积分双重返还（TOCTOU竞态）（CRITICAL）⚠️ 必读
+
+**问题描述**：
+- 用户反馈："一次6积分，10次任务，有1次失败，后端直接返还54积分（应为6积分）"
+- 积分返还过程异常：先返还54，再逐次扣除成功的积分
+- 最终数值正确，但过程显示严重错误
+
+**根因分析**：
+后端存在 **TOCTOU（Time-of-Check-Time-of-Use）竞态条件**：
+
+1. **第1206行缺少 `creditsRefunded` 检查**：
+   ```typescript
+   // ❌ 原代码（第1206行）
+   if (failedCount > 0 && creditsDeducted && actualUserId && creditsPerImage > 0) {
+     // 直接返还，没有检查 creditsRefunded！
+   }
+   ```
+
+2. **使用闭包旧变量而非最新状态**：
+   - 多处返还逻辑使用外层循环中的 `currentResult` 变量
+   - 该变量可能持有过期状态，导致多个返还逻辑同时通过检查
+
+**修复方案**：
+
+### 核心原则：执行返还前必须重新获取最新状态
+
+```typescript
+// ❌ 错误：使用外层循环的 currentResult（可能是旧值）
+if (creditsDeducted && actualUserId && !currentResult.creditsRefunded) {
+  await refundCredits(...);
+}
+
+// ✅ 正确：返还前重新获取最新状态
+const latestResult = getTaskResult(actualTaskId);
+if (creditsDeducted && actualUserId && !latestResult?.creditsRefunded) {
+  await refundCredits(...);
+  // 返还后立即标记
+  const afterRefundResult = getTaskResult(actualTaskId);
+  if (afterRefundResult) {
+    setTaskResult(actualTaskId, { ...afterRefundResult, creditsRefunded: true });
+  }
+}
+```
+
+### 修复的所有调用点
+
+| 文件 | 行号 | 修复内容 |
+|------|------|----------|
+| `image-to-image/route.ts` | 1206-1223 | 添加 `latestResultForRefund` 检查 |
+| `image-to-image/route.ts` | 1268-1284 | 添加 `latestResultForFailedRefund` 检查 |
+| `image-to-image/route.ts` | 1315-1335 | 添加 `latestResultForSSERefund` 检查 |
+| `image-to-image/route.ts` | 1417-1436 | 添加 `latestResultForTimeoutRefund` 检查 |
+| `draw-callback/route.ts` | 486-508 | 添加 `latestResultForWebhookRefund` 检查 |
+
+### 修改文件
+- `src/app/api/image-to-image/route.ts`
+  - 第 1206 行：添加 `latestResultForRefund` 获取 + `creditsRefunded` 检查
+  - 第 1268 行：添加 `latestResultForFailedRefund` 获取 + `creditsRefunded` 检查
+  - 第 1315 行：添加 `latestResultForSSERefund` 获取 + `creditsRefunded` 检查
+  - 第 1417 行：添加 `latestResultForTimeoutRefund` 获取 + `creditsRefunded` 检查
+- `src/app/api/webhook/draw-callback/route.ts`
+  - 第 486 行：添加 `latestResultForWebhookRefund` 获取 + `creditsRefunded` 检查
+
+### 防御铁律
+
+1. **所有 `refundCredits` 调用前必须有 `creditsRefunded` 检查**
+2. **检查必须使用最新获取的状态，禁止使用闭包变量**
+3. **返还后立即标记 `creditsRefunded: true`**
+
+### 状态
+✅ 已修复（2025-01）
 
 ---
 

@@ -482,8 +482,10 @@ export async function POST(request: NextRequest) {
           console.log(`[Webhook] 更新失败状态: ${mainTaskId}, index: ${itemIndex}, 进度: ${completedCount}/${generationCount}`);
           
           // ⚠️ 积分补偿：当所有任务完成时，退还失败部分的积分
+          // #277 修复：必须先获取最新状态，再检查 creditsRefunded，防止双重返还
+          const latestResultForWebhookRefund = getTaskResult(mainTaskId);
           // #155 防止积分重复返还
-          if (isAllCompleted && mappingResult.userId && !existingResult.creditsRefunded) {
+          if (isAllCompleted && mappingResult.userId && !latestResultForWebhookRefund?.creditsRefunded) {
             const failedCount = imageItems.filter(i => i.status === 'failed').length;
             const creditsPerImage = mappingResult.requestParams?.creditsPerImage || 0;
             

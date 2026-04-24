@@ -1203,7 +1203,9 @@ export async function POST(request: NextRequest) {
                 
                 // 部分失败退还积分
                 let finalRefundAmount = 0;
-                if (failedCount > 0 && creditsDeducted && actualUserId && creditsPerImage > 0) {
+                // #277 修复：必须先获取最新状态，再检查 creditsRefunded，防止双重返还
+                const latestResultForRefund = getTaskResult(actualTaskId);
+                if (failedCount > 0 && creditsDeducted && actualUserId && creditsPerImage > 0 && !latestResultForRefund?.creditsRefunded) {
                   finalRefundAmount = failedCount * creditsPerImage;
                   try {
                     const refundResult = await refundCredits(actualUserId, finalRefundAmount, actualTaskId, `部分图片失败退还`);
@@ -1212,9 +1214,9 @@ export async function POST(request: NextRequest) {
                       // #276 修复：更新最终余额，确保前端显示正确的积分
                       finalCreditsBalance = refundResult.remaining ?? finalCreditsBalance;
                       // #267 标记已返还，防止重复
-                      const currentResult = getTaskResult(actualTaskId);
-                      if (currentResult) {
-                        setTaskResult(actualTaskId, { ...currentResult, creditsRefunded: true });
+                      const currentResultAfterRefund = getTaskResult(actualTaskId);
+                      if (currentResultAfterRefund) {
+                        setTaskResult(actualTaskId, { ...currentResultAfterRefund, creditsRefunded: true });
                       }
                     }
                   } catch (err) {
@@ -1262,8 +1264,10 @@ export async function POST(request: NextRequest) {
                   
                   // ====== 全部失败，退还全部积分 ======
                   let creditsBalanceAfter = creditsBalanceAfterDeduct;  // 🔥 优先使用扣费后的余额
+                  // #277 修复：必须先获取最新状态，再检查 creditsRefunded，防止双重返还
+                  const latestResultForFailedRefund = getTaskResult(actualTaskId);
                   // #155 防止积分重复返还
-                  if (creditsDeducted && actualUserId && creditsPerImage > 0 && !currentResult.creditsRefunded) {
+                  if (creditsDeducted && actualUserId && creditsPerImage > 0 && !latestResultForFailedRefund?.creditsRefunded) {
                     const refundAmount = generationCount * creditsPerImage;
                     console.log(`[积分补偿] 任务全部失败，退还 ${refundAmount} 积分`);
                     try {
@@ -1272,7 +1276,10 @@ export async function POST(request: NextRequest) {
                         creditsBalanceAfter = refundResult.remaining ?? null;
                         console.log(`[积分补偿] 全额退还成功，剩余 ${creditsBalanceAfter} 积分`);
                         // #155 标记已返还，防止重复
-                        setTaskResult(actualTaskId, { ...currentResult, creditsRefunded: true });
+                        const afterRefundResult = getTaskResult(actualTaskId);
+                        if (afterRefundResult) {
+                          setTaskResult(actualTaskId, { ...afterRefundResult, creditsRefunded: true });
+                        }
                       } else {
                         console.error(`[积分补偿] 全额退还失败: ${refundResult.error}`);
                       }
@@ -1304,8 +1311,10 @@ export async function POST(request: NextRequest) {
                 let refundAmount = 0;
                 let creditsBalanceAfter = creditsBalanceAfterDeduct;  // 🔥 优先使用扣费后的余额
                 
+                // #277 修复：必须先获取最新状态，再检查 creditsRefunded，防止双重返还
+                const latestResultForSSERefund = getTaskResult(actualTaskId);
                 // #155 防止积分重复返还
-                if (creditsDeducted && actualUserId && creditsPerImage > 0 && !currentResult.creditsRefunded) {
+                if (creditsDeducted && actualUserId && creditsPerImage > 0 && !latestResultForSSERefund?.creditsRefunded) {
                   const failedItems = imageItems.filter(i => i.status === 'failed');
                   if (failedItems.length > 0) {
                     refundAmount = failedItems.length * creditsPerImage;
@@ -1316,7 +1325,10 @@ export async function POST(request: NextRequest) {
                         creditsBalanceAfter = refundResult.remaining ?? null;
                         console.log(`[积分补偿] SSE退还成功，剩余 ${creditsBalanceAfter} 积分`);
                         // #155 标记已返还，防止重复
-                        setTaskResult(actualTaskId, { ...currentResult, creditsRefunded: true });
+                        const afterRefundResult = getTaskResult(actualTaskId);
+                        if (afterRefundResult) {
+                          setTaskResult(actualTaskId, { ...afterRefundResult, creditsRefunded: true });
+                        }
                       } else {
                         console.error(`[积分补偿] SSE退还失败: ${refundResult.error}`);
                       }
@@ -1401,8 +1413,10 @@ export async function POST(request: NextRequest) {
               });
               
               // #276 修复：积分补偿改为 await，确保返还完成后再发送事件
+              // #277 修复：必须先获取最新状态，再检查 creditsRefunded，防止双重返还
+              const latestResultForTimeoutRefund = getTaskResult(actualTaskId);
               // #155 防止积分重复返还
-              if (failedCount > 0 && creditsDeducted && actualUserId && creditsPerImage > 0 && !currentResult.creditsRefunded) {
+              if (failedCount > 0 && creditsDeducted && actualUserId && creditsPerImage > 0 && !latestResultForTimeoutRefund?.creditsRefunded) {
                 const refundAmount = failedCount * creditsPerImage;
                 console.log(`[积分补偿] 超时场景：${failedCount}/${generationCount} 张失败，退还 ${refundAmount} 积分`);
                 try {
@@ -1411,9 +1425,9 @@ export async function POST(request: NextRequest) {
                     timeoutCreditsBalance = refundResult.remaining ?? timeoutCreditsBalance;  // #276 修复：更新余额
                     console.log(`[积分补偿] 超时退还成功，剩余 ${refundResult.remaining} 积分`);
                     // #155 标记已返还，防止重复
-                    const latestResult = getTaskResult(actualTaskId);
-                    if (latestResult) {
-                      setTaskResult(actualTaskId, { ...latestResult, creditsRefunded: true });
+                    const afterRefundResult = getTaskResult(actualTaskId);
+                    if (afterRefundResult) {
+                      setTaskResult(actualTaskId, { ...afterRefundResult, creditsRefunded: true });
                     }
                   } else {
                     console.error(`[积分补偿] 超时退还失败: ${refundResult.error}`);

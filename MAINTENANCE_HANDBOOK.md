@@ -135,7 +135,7 @@
 | #274 | 默认模型改为GPT Image 2 + 删除2K/4K | Context默认值 + inferParameters只返回1K | ✅ 已修复 | |
 | #275 | 安全漏洞：MIME伪造+SSRF+execSync | 魔数验证+URL白名单+移除child_process | ✅ 已修复 | 安全核心 |
 | #276 | 生成失败积分返还不更新前端 | 双保险：后端await返还+前端timeout事件处理 | ✅ 已修复 | 核心必读 |
-| #277 | 管理后台拖动排序不生效+前端排序无效 | 硬编码MODEL_SORT_ORDER覆盖数据库sort_order | ✅ 已修复 | 核心必读 |
+| #277 | 管理后台拖动排序不生效+前端排序无效+默认模型 | 硬编码MODEL_SORT_ORDER覆盖+useSharedData默认值 | ✅ 已修复 | 核心必读 |
 
 ---
 

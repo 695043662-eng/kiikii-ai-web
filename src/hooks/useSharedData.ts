@@ -45,9 +45,9 @@ export function useSharedData() {
     return '';
   });
 
-  // 【2025-01修复】模型选择每次进入页面都默认 nano-banana-2，与画布页面行为一致
-  // 不再从 localStorage 读取上次选择，确保每次进入都是 banana 2通道1模型
-  const [model, setModel] = useState<string>('nano-banana-2');
+  // 【#277 修复】模型选择默认 GPT Image 2
+  // 与 AIGeneratorContext 保持一致
+  const [model, setModel] = useState<string>('gpt-image-2');
 
   const [aspectRatio, setAspectRatio] = useState<string>(() => {
     if (typeof window !== 'undefined') {

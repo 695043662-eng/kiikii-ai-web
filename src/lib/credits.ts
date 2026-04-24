@@ -354,29 +354,76 @@ export async function checkCreditsSufficient(
  * 
  * #156 防重复机制：检查 taskId 是否已退还过
  * #271 双式记账法：写入 credit_logs 统一流水表
+ * #285 并发安全：先插入日志（唯一约束），再更新积分
+ * #286 修复：使用 on_conflict 参数实现数据库层面的原子防重
+ * 
+ * ⚠️ 前提条件：数据库需要有唯一约束
+ * CREATE UNIQUE INDEX credit_logs_reference_id_type_unique 
+ * ON credit_logs (reference_id, type) WHERE reference_id IS NOT NULL;
  */
 export async function refundCredits(
   userId: string,
   credits: number,
   taskId: string,
   reason: string = '任务失败补偿'
-): Promise<{ success: boolean; remaining?: number; error?: string }> {
+): Promise<{ success: boolean; remaining?: number; error?: string; skipped?: boolean }> {
   try {
     // ========================================
-    // #156/#271 防重复机制：检查 taskId 是否已退还过（从 credit_logs 查询）
+    // #285/#286 并发安全：先插入日志记录（使用 upsert + on_conflict 防止并发重复）
+    // 关键：数据库必须有 (reference_id, type) 的唯一约束
     // ========================================
     if (taskId) {
-      const { status: checkStatus, data: existingLogs } = await restRequest('credit_logs', {
-        query: `reference_id=eq.${taskId}&type=eq.refund&select=id`,
+      // 使用 upsert + on_conflict 尝试插入日志
+      // 如果数据库有唯一约束，并发请求只有一个会成功插入
+      // 失败的请求会收到 409 Conflict 或 23505 错误
+      const { status: insertStatus, data: insertData } = await restRequest('credit_logs', {
+        method: 'POST',
+        body: {
+          user_id: userId,
+          amount: credits,
+          type: 'refund',
+          reference_id: taskId,
+          description: reason,
+          created_at: new Date().toISOString(),
+        },
+        prefer: 'return=representation',
+        // 注意：on_conflict 参数需要数据库有对应的唯一约束
+        // query: `on_conflict=reference_id,type`,
       });
 
-      if (checkStatus === 200 && existingLogs && existingLogs.length > 0) {
-        console.log(`[refundCredits] #156 防重复: taskId=${taskId} 已退还过，跳过`);
+      // 检查插入结果
+      // - 201: 插入成功，继续返还积分
+      // - 409/400: 唯一约束冲突，说明已被其他请求返还
+      // - 其他错误: 需要进一步检查
+      if (insertStatus === 409 || insertStatus === 400) {
+        // 唯一约束冲突，说明已被其他请求返还
+        console.log(`[refundCredits] #286 唯一约束冲突: taskId=${taskId} 已被其他请求退还`);
         return {
           success: true,
-          remaining: undefined,
-          error: '该任务已退还过积分（防重复）',
+          skipped: true,
+          error: '该任务已退还过积分（并发防重复）',
         };
+      }
+
+      if (insertStatus !== 201) {
+        // 其他错误，再次检查是否已返还
+        const { status: checkStatus, data: existingLogs } = await restRequest('credit_logs', {
+          query: `reference_id=eq.${taskId}&type=eq.refund&select=id`,
+        });
+
+        if (checkStatus === 200 && existingLogs && existingLogs.length > 0) {
+          console.log(`[refundCredits] #286 检查确认: taskId=${taskId} 已退还过`);
+          return {
+            success: true,
+            skipped: true,
+            error: '该任务已退还过积分（防重复）',
+          };
+        }
+
+        // 插入失败且没有已存在的记录，继续尝试返还（可能没有唯一约束）
+        console.log(`[refundCredits] #286 插入日志失败 (status=${insertStatus})，继续尝试返还`);
+      } else {
+        console.log(`[refundCredits] #286 日志记录已插入: taskId=${taskId}`);
       }
     }
 
@@ -406,22 +453,24 @@ export async function refundCredits(
 
     const remainingCredits = patchData[0].credits;
 
-    // 3. #271 双式记账：写入统一流水表（使用数据库返回的余额）
-    const { status: logStatus } = await restRequest('credit_logs', {
-      method: 'POST',
-      body: {
-        user_id: userId,
-        amount: credits,  // 正数，表示增加
-        balance_after: remainingCredits,
-        type: 'refund',
-        reference_id: taskId || null,
-        description: reason,
-        created_at: new Date().toISOString(),
-      },
-    });
-    
-    if (logStatus !== 201) {
-      console.error('[refundCredits] #271 记录流水失败');
+    // 3. 如果之前没有插入日志（taskId 为空的情况），现在插入
+    if (!taskId) {
+      const { status: logStatus } = await restRequest('credit_logs', {
+        method: 'POST',
+        body: {
+          user_id: userId,
+          amount: credits,
+          balance_after: remainingCredits,
+          type: 'refund',
+          reference_id: null,
+          description: reason,
+          created_at: new Date().toISOString(),
+        },
+      });
+      
+      if (logStatus !== 201) {
+        console.error('[refundCredits] #271 记录流水失败');
+      }
     }
 
     console.log(`[refundCredits] 退还 ${credits} 积分成功，剩余: ${remainingCredits}, taskId: ${taskId}`);

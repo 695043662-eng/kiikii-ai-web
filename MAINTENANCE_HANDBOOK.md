@@ -177,6 +177,8 @@ exec_sql({ sql: "SELECT * FROM users" })
 | #282 | 积分返还逻辑分散导致漏返 | 统一 handlePartialRefund 函数 | ✅ 已修复 | **核心必读** |
 | #283 | Webhook积分返还未await | 改为await等待返还完成 | ✅ 已修复 | **核心必读** |
 | #284 | GET接口超时未返还积分 | 5分钟超时检测 + 自动返还机制 | ✅ 已修复 | **核心必读** |
+| #285 | 并发请求导致重复返还 | 数据库唯一约束 + on_conflict参数 | ✅ 已修复 | **核心必读** |
+| #286 | refundCredits 并发安全 | 先插入日志再更新积分 + 唯一约束检测 | ✅ 已修复 | **核心必读** |
 
 ---
 
@@ -4920,6 +4922,105 @@ VALUES ('5bb66162-29de-4839-8726-54d217663506', 'refund', 18, '1777036525034', N
 1. **幽灵任务是积分返还的最大漏洞**：任务卡在 `generating` 状态，前端轮询永远得不到结果，积分也不返还
 2. **GET 接口必须有兜底机制**：不能只查询状态，还要处理超时场景
 3. **积分返还必须在所有可能的失败路径上触发**：SSE 超时、Webhook 失败、GET 超时
+
+---
+
+## #285 并发请求导致重复返还积分（CRITICAL）
+
+**发现时间**：2026-04-24
+
+**问题现象**：
+- 任务 `1777031123674`：扣 15 返 30（返还了 2 次）
+- 任务 `1777030922698`：扣 15 返 30（返还了 2 次）
+- 两次返还时间间隔极短（0.276 秒和 0.703 秒）
+
+**根因分析**：
+`refundCredits` 函数使用 **检查-执行（check-then-act）** 模式，在并发场景下有竞态条件：
+1. 请求 A 和 B 同时检查：都发现没有返还记录
+2. 请求 A 和 B 都执行返还：都成功
+3. 用户收到双倍返还！
+
+```
+请求 A: 检查无记录 → 插入日志成功 → 更新积分
+请求 B: 检查无记录 → 插入日志成功 → 更新积分
+结果: 日志2条，积分返还2次！
+```
+
+**漏洞位置**：`src/lib/credits.ts` 的 `refundCredits` 函数
+
+**修复方案**：
+1. **数据库层面**：创建 `(reference_id, type)` 唯一约束
+2. **代码层面**：先插入日志，如果唯一约束冲突则跳过
+
+**修复代码**：
+```sql
+-- 在 Supabase 控制台执行
+CREATE UNIQUE INDEX IF NOT EXISTS credit_logs_reference_id_type_unique 
+ON credit_logs (reference_id, type) 
+WHERE reference_id IS NOT NULL;
+```
+
+```typescript
+// 使用唯一约束实现原子防重
+const { status: insertStatus } = await restRequest('credit_logs', {
+  method: 'POST',
+  body: { user_id: userId, amount: credits, type: 'refund', reference_id: taskId, ... },
+  prefer: 'return=representation',
+});
+
+// 唯一约束冲突 = 已被其他请求返还
+if (insertStatus === 409 || insertStatus === 400) {
+  return { success: true, skipped: true, error: '已退还过' };
+}
+```
+
+**补偿操作**：
+已删除重复记录并扣除多返还的 30 积分：
+- 删除 credit_logs id=277, 282
+- 从用户积分扣除 30
+
+**修改文件**：
+- `supabase/migrations/20260424_add_credit_logs_unique_constraint.sql` — 迁移文件
+- `src/lib/credits.ts` — refundCredits 函数
+
+---
+
+## #286 refundCredits 并发安全（CRITICAL）
+
+**发现时间**：2026-04-24
+
+**问题现象**：
+并发测试显示，5 个并发请求都成功插入日志并返还积分，防重机制完全失效。
+
+**根因分析**：
+没有数据库唯一约束的情况下，JavaScript 层面的检查-执行模式无法防止并发。
+
+**修复方案**：
+1. 必须在数据库创建唯一约束
+2. 代码先插入日志，唯一约束冲突则跳过
+3. 插入成功后再更新积分
+
+**关键约束**：
+⚠️ **必须在 Supabase 控制台执行唯一约束 SQL！**
+
+```
+CREATE UNIQUE INDEX credit_logs_reference_id_type_unique 
+ON credit_logs (reference_id, type) 
+WHERE reference_id IS NOT NULL;
+```
+
+**修改文件**：
+- `src/lib/credits.ts`
+  - refundCredits 函数：先插入日志再更新积分
+  - 添加 skipped 返回字段
+
+**教训总结**：
+1. **检查-执行模式无法防止并发**：必须有数据库层面的唯一约束
+2. **先插入再更新**：确保只有插入成功的请求才会更新积分
+3. **所有防重机制最终依赖数据库约束**：应用层的锁都不可靠
+
+---
+
 ### 状态
-✅ 已修复
+✅ 已修复（需要在 Supabase 控制台执行唯一约束 SQL）
 

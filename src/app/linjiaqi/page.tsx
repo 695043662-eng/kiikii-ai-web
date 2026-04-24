@@ -609,11 +609,25 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (!currentUser) return;
 
+    // 刷新用户列表积分（轻量级，只获取用户列表）
+    const fetchUsersCredits = async () => {
+      try {
+        const res = await fetch('/api/users', { credentials: 'include' });
+        const data = await res.json();
+        if (data.data) {
+          setUsers(data.data);
+        }
+      } catch (error) {
+        console.error('[管理后台] 刷新用户积分失败:', error);
+      }
+    };
+
     // 1. 焦点回刷：切换回管理后台标签页时自动刷新
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         console.log('[管理后台] 焦点回刷：刷新积分数据');
         fetchAdminInfo();
+        fetchUsersCredits();
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -622,6 +636,7 @@ export default function AdminDashboard() {
     const pollInterval = setInterval(() => {
       console.log('[管理后台] 静默轮询：刷新积分数据');
       fetchAdminInfo();
+      fetchUsersCredits();
     }, 30000);
 
     // 3. #269 新增：监听全局积分变化事件（方案A核心）
@@ -629,6 +644,7 @@ export default function AdminDashboard() {
     const handleCreditsChanged = () => {
       console.log('[管理后台] 收到积分变化事件：立即刷新');
       fetchAdminInfo();
+      fetchUsersCredits();
     };
     window.addEventListener('creditsChanged', handleCreditsChanged);
 

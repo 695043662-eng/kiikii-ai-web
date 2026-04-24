@@ -170,7 +170,9 @@ export async function POST(request: NextRequest) {
       }
       
       // 扣除积分
-      const deductResult = await deductCredits(userId, requiredCredits);
+      // #271 双式记账：生成唯一的 referenceId
+      const splitReferenceId = `split_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      const deductResult = await deductCredits(userId, requiredCredits, splitReferenceId);
       if (!deductResult.success) {
         console.error(`[Split] 扣除积分失败: ${deductResult.error}`);
         return NextResponse.json({

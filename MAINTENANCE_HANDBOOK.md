@@ -129,6 +129,7 @@
 | #268 | 所有图片提交失败不返还积分 | SSE分支直接break跳过积分返还逻辑 | ✅ 已修复 | 核心必读 |
 | #269 | 管理后台积分不实时更新 | 监听事件 + 刷新用户列表 + 事件来源标识防重复请求 | ✅ 已修复 | 核心必读 |
 | #270 | 积分更新体验优化（真扣真显） | SSE start 携带积分 + 事件携带 userId/newCredits + 接收端本地热更新 | ✅ 已修复 | 核心必读 |
+| #271 | 双式记账法（统一流水表） | credit_logs 统一记录所有积分变动 + 四大变动点接入 | ✅ 已修复 | 核心必读 |
 
 ---
 
@@ -3171,6 +3172,107 @@ if (existingMd5s.includes(result.md5)) {
 - `src/app/generate/page.tsx`
   - handleRegenerate 函数开头强制清空所有 State 和 Ref
   - 简化后续逻辑，删除重复清空代码
+
+### 状态
+✅ 已修复
+
+---
+
+### #271 - 双式记账法（统一流水表）CRITICAL ⚠️ 必读
+
+**问题描述**：
+- 积分变动缺乏统一追踪，无法追溯历史
+- 风控预警缺乏数据基础
+- 多套流水表（credit_refund_logs）导致查询分散
+
+**根因分析**：
+积分变动分散在多个 API 中，没有统一的流水记录。
+
+**解决方案**：
+建立统一积分流水表 `credit_logs`，所有积分变动都写入此表。
+
+**数据库 DDL**：
+```sql
+-- 扩展 credit_logs 表（原址升级）
+ALTER TABLE credit_logs ADD COLUMN IF NOT EXISTS reference_id VARCHAR(255);
+ALTER TABLE credit_logs ADD COLUMN IF NOT EXISTS description TEXT;
+
+-- 添加索引
+CREATE INDEX IF NOT EXISTS idx_credit_logs_reference_id ON credit_logs(reference_id);
+
+-- 添加 CHECK 约束防负积分
+ALTER TABLE users ADD CONSTRAINT credits_non_negative CHECK (credits >= 0);
+```
+
+**表结构**：
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | SERIAL | 主键 |
+| user_id | VARCHAR(255) | 用户ID |
+| amount | INTEGER | 变动金额（正数增加，负数扣减） |
+| balance_after | INTEGER | 交易后余额 |
+| type | VARCHAR(50) | 类型：generate/refund/recharge/admin_adjust/exchange |
+| reference_id | VARCHAR(255) | 关联ID（taskId/keyCode等） |
+| description | TEXT | 描述 |
+| created_at | TIMESTAMPTZ | 创建时间 |
+
+**四大变动点接入**：
+1. **image-to-image/route.ts**：生成扣费 → `type: 'generate'`
+2. **split/route.ts**：智能分割 → `type: 'generate'`
+3. **redeem/route.ts**：卡密充值 → `type: 'recharge'`
+4. **linjiaqi/distribute/route.ts**：后台调整 → `type: 'admin_adjust'`
+5. **exchange/route.ts**：积分兑换 → `type: 'exchange'`
+
+**代码示例（lib/credits.ts）**：
+```typescript
+// 扣费时同时记录流水
+export async function deductCredits(
+  userId: string,
+  amount: number,
+  referenceId?: string
+): Promise<{ success: boolean; newCredits: number; error?: string }> {
+  // 1. 更新用户积分
+  // 2. 写入流水表
+  await client.from('credit_logs').insert({
+    user_id: userId,
+    amount: -amount, // 负数
+    balance_after: newCredits,
+    type: 'generate',
+    reference_id: referenceId,
+    description: `生成扣费 ${amount} 积分`,
+    created_at: new Date().toISOString(),
+  });
+}
+
+// 返还时写入流水
+export async function refundCredits(
+  userId: string,
+  amount: number,
+  originalReferenceId: string,
+  reason: string
+): Promise<{ success: boolean; newCredits: number }> {
+  // 1. 更新用户积分
+  // 2. 写入流水表（type: 'refund'）
+  await client.from('credit_logs').insert({
+    user_id: userId,
+    amount: amount, // 正数
+    balance_after: newCredits,
+    type: 'refund',
+    reference_id: `refund_${originalReferenceId}`,
+    description: reason,
+    created_at: new Date().toISOString(),
+  });
+}
+```
+
+**修改文件**：
+- `src/storage/database/shared/schema.ts` - 添加 creditLogs 表定义
+- `src/lib/credits.ts` - deductCredits/refundCredits 添加流水记录
+- `src/app/api/image-to-image/route.ts` - 调用 deductCredits 时传递 referenceId
+- `src/app/api/split/route.ts` - 调用 deductCredits 时传递 referenceId
+- `src/app/api/redeem/route.ts` - 添加 credit_logs 写入
+- `src/app/api/linjiaqi/distribute/route.ts` - 添加 credit_logs 写入
+- `src/app/api/exchange/route.ts` - 添加 credit_logs 写入
 
 ### 状态
 ✅ 已修复

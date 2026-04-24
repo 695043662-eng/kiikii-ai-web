@@ -799,7 +799,8 @@ export async function POST(request: NextRequest) {
     
     if (actualUserId && totalCredits > 0) {
       console.log(`[积分扣除] ✅ 条件满足，开始调用 deductCredits`);
-      const deductResult = await deductCredits(actualUserId, totalCredits);
+      // #271 双式记账：传入 taskId 作为 referenceId
+      const deductResult = await deductCredits(actualUserId, totalCredits, actualTaskId);
       console.log(`[积分扣除] deductCredits 返回:`, JSON.stringify(deductResult));
       
       if (!deductResult.success) {

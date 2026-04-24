@@ -196,15 +196,18 @@ export async function calculateCredits(
  * 包含原子性检查和更新，防止并发竞态
  * 
  * 🔥 核心逻辑：用户不存在时自动创建（无感开户），绝不报错！
+ * 
+ * #271 双式记账法：写入 credit_logs 统一流水表
  */
 const DEFAULT_CREDITS = 0; // 新用户初始积分
 
 export async function deductCredits(
   userId: string,
-  credits: number
+  credits: number,
+  referenceId?: string  // #271 新增：关联ID（如 taskId）
 ): Promise<{ success: boolean; remaining?: number; error?: string }> {
   try {
-    console.log(`[deductCredits] 开始扣除积分, userId=${userId}, credits=${credits}`);
+    console.log(`[deductCredits] 开始扣除积分, userId=${userId}, credits=${credits}, referenceId=${referenceId}`);
     
     // 1. 查询当前积分
     const { status: getStatus, data: userData } = await restRequest('users', {
@@ -277,19 +280,23 @@ export async function deductCredits(
 
     const remainingCredits = patchData[0].credits;
 
-    // 6. 异步记录日志
-    restRequest('credit_logs', {
+    // 6. #271 双式记账：同步写入流水表（使用数据库返回的余额）
+    const { status: logStatus } = await restRequest('credit_logs', {
       method: 'POST',
       body: {
         user_id: userId,
         amount: -credits,
-        type: 'deduct',
         balance_after: remainingCredits,
+        type: 'consume',
+        reference_id: referenceId || null,
+        description: `生成图片扣除 ${credits} 积分`,
         created_at: new Date().toISOString(),
       },
-    }).then(({ status }) => {
-      if (status !== 201) console.error('[deductCredits] 记录日志失败');
     });
+    
+    if (logStatus !== 201) {
+      console.error('[deductCredits] #271 记录流水失败');
+    }
 
     console.log(`[deductCredits] 扣除 ${credits} 积分成功，剩余: ${remainingCredits}`);
 
@@ -346,6 +353,7 @@ export async function checkCreditsSufficient(
  * 用于任务失败时的积分补偿
  * 
  * #156 防重复机制：检查 taskId 是否已退还过
+ * #271 双式记账法：写入 credit_logs 统一流水表
  */
 export async function refundCredits(
   userId: string,
@@ -355,11 +363,11 @@ export async function refundCredits(
 ): Promise<{ success: boolean; remaining?: number; error?: string }> {
   try {
     // ========================================
-    // #156 防重复机制：检查 taskId 是否已退还过
+    // #156/#271 防重复机制：检查 taskId 是否已退还过（从 credit_logs 查询）
     // ========================================
     if (taskId) {
-      const { status: checkStatus, data: existingLogs } = await restRequest('credit_refund_logs', {
-        query: `task_id=eq.${taskId}&select=id`,
+      const { status: checkStatus, data: existingLogs } = await restRequest('credit_logs', {
+        query: `reference_id=eq.${taskId}&type=eq.refund&select=id`,
       });
 
       if (checkStatus === 200 && existingLogs && existingLogs.length > 0) {
@@ -398,20 +406,22 @@ export async function refundCredits(
 
     const remainingCredits = patchData[0].credits;
 
-    // 3. 记录退款日志（同步执行，确保记录成功）
-    const { status: logStatus } = await restRequest('credit_refund_logs', {
+    // 3. #271 双式记账：写入统一流水表（使用数据库返回的余额）
+    const { status: logStatus } = await restRequest('credit_logs', {
       method: 'POST',
       body: {
         user_id: userId,
-        task_id: taskId || null,
-        amount: credits,
-        reason: reason,
+        amount: credits,  // 正数，表示增加
+        balance_after: remainingCredits,
+        type: 'refund',
+        reference_id: taskId || null,
+        description: reason,
         created_at: new Date().toISOString(),
       },
     });
     
     if (logStatus !== 201) {
-      console.error('[refundCredits] 记录退款日志失败');
+      console.error('[refundCredits] #271 记录流水失败');
     }
 
     console.log(`[refundCredits] 退还 ${credits} 积分成功，剩余: ${remainingCredits}, taskId: ${taskId}`);
@@ -425,6 +435,85 @@ export async function refundCredits(
     return {
       success: false,
       error: error.message || '退还积分失败',
+    };
+  }
+}
+
+/**
+ * #271 新增：通用积分增加函数（双式记账法）
+ * 用于充值、后台调整、兑换等场景
+ * 
+ * @param userId 用户ID
+ * @param credits 增加的积分（正数）
+ * @param type 类型：recharge, admin_adjust, exchange
+ * @param referenceId 关联ID（卡密、操作ID等）
+ * @param description 描述
+ */
+export async function addCredits(
+  userId: string,
+  credits: number,
+  type: 'recharge' | 'admin_adjust' | 'exchange' | 'other',
+  referenceId?: string,
+  description?: string
+): Promise<{ success: boolean; remaining?: number; error?: string }> {
+  try {
+    console.log(`[addCredits] 开始增加积分, userId=${userId}, credits=${credits}, type=${type}, referenceId=${referenceId}`);
+    
+    // 1. 查询当前积分
+    const { status: getStatus, data: userData } = await restRequest('users', {
+      query: `id=eq.${userId}&select=credits`,
+    });
+
+    if (getStatus !== 200 || !userData || userData.length === 0) {
+      return { success: false, error: '用户不存在' };
+    }
+
+    const currentCredits = userData[0].credits || 0;
+    const newCredits = currentCredits + credits;
+
+    // 2. 更新积分
+    const { status: patchStatus, data: patchData } = await restRequest('users', {
+      method: 'PATCH',
+      query: `id=eq.${userId}`,
+      body: { credits: newCredits, updated_at: new Date().toISOString() },
+      prefer: 'return=representation',
+    });
+
+    if (patchStatus !== 200 || !patchData || patchData.length === 0) {
+      return { success: false, error: '更新积分失败' };
+    }
+
+    const remainingCredits = patchData[0].credits;
+
+    // 3. #271 双式记账：写入统一流水表（使用数据库返回的余额）
+    const { status: logStatus } = await restRequest('credit_logs', {
+      method: 'POST',
+      body: {
+        user_id: userId,
+        amount: credits,  // 正数，表示增加
+        balance_after: remainingCredits,
+        type: type,
+        reference_id: referenceId || null,
+        description: description || `${type} 增加 ${credits} 积分`,
+        created_at: new Date().toISOString(),
+      },
+    });
+    
+    if (logStatus !== 201) {
+      console.error('[addCredits] #271 记录流水失败');
+    }
+
+    console.log(`[addCredits] 增加 ${credits} 积分成功，剩余: ${remainingCredits}`);
+
+    return {
+      success: true,
+      remaining: remainingCredits,
+    };
+  } catch (error: any) {
+    console.error('[addCredits] 异常:', error);
+    return {
+      success: false,
+      error: error.message || '增加积分失败',
     };
   }
 }

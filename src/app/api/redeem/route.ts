@@ -103,6 +103,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '积分兑换失败' }, { status: 500 });
     }
     
+    // #271 双式记账：写入统一流水表
+    try {
+      await client.from('credit_logs').insert({
+        user_id: userId,
+        amount: keyData.credits,  // 正数，表示增加
+        balance_after: newCredits,
+        type: 'recharge',
+        reference_id: keyData.key_code,
+        description: `卡密兑换 ${keyData.credits} 积分`,
+        created_at: new Date().toISOString(),
+      });
+    } catch (logErr) {
+      console.error('#271 记录流水失败:', logErr);
+      // 不影响主流程
+    }
+    
     // 3. 记录兑换使用（用于限量兑换码统计和防重复）
     try {
       await client.from('redeem_usage').insert({

@@ -97,10 +97,27 @@ export async function POST(request: NextRequest) {
     }
     
     // 更新用户积分
+    const newCredits = user.credits - pointsUsed;
     await client
       .from('users')
-      .update({ credits: user.credits - pointsUsed })
+      .update({ credits: newCredits })
       .eq('id', userId);
+    
+    // #271 双式记账：写入统一流水表
+    try {
+      await client.from('credit_logs').insert({
+        user_id: userId,
+        amount: -pointsUsed, // 负数，表示扣减
+        balance_after: newCredits,
+        type: 'exchange',
+        reference_id: `exchange_${data.id}`,
+        description: `兑换 ${itemName}，消耗 ${pointsUsed} 积分`,
+        created_at: new Date().toISOString(),
+      });
+    } catch (logErr) {
+      console.error('#271 记录流水失败:', logErr);
+      // 不影响主流程
+    }
     
     return NextResponse.json({ data }, { status: 201 });
   } catch (error) {

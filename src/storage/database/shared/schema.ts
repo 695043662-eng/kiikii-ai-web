@@ -377,6 +377,23 @@ export const creditRefundLogs = pgTable("credit_refund_logs", {
 	index("idx_credit_refund_logs_user_id").using("btree", table.userId.asc().nullsLast().op("uuid_ops")),
 ]);
 
+// #271 统一积分流水表（双式记账法）
+export const creditLogs = pgTable("credit_logs", {
+	id: serial().primaryKey().notNull(),
+	userId: text("user_id").notNull(),
+	amount: integer().notNull(),  // 正数增加，负数扣除
+	balanceAfter: integer("balance_after"),  // 交易后余额
+	type: varchar({ length: 50 }).notNull(),  // consume, refund, recharge, admin_adjust, exchange
+	referenceId: text("reference_id"),  // taskId, key_code, 或其他关联ID
+	description: text(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("idx_credit_logs_user_id").using("btree", table.userId.asc().nullsLast().op("text_ops")),
+	index("idx_credit_logs_type").using("btree", table.type.asc().nullsLast().op("text_ops")),
+	index("idx_credit_logs_created_at").using("btree", table.createdAt.asc().nullsLast().op("timestamptz_ops")),
+	index("idx_credit_logs_reference_id").using("btree", table.referenceId.asc().nullsLast().op("text_ops")),
+]);
+
 export const generationRecords = pgTable("generation_records", {
 	id: integer().default(sql`nextval('generation_records_id_seq1'::regclass)`).primaryKey().notNull(),
 	userId: text("user_id").notNull(),

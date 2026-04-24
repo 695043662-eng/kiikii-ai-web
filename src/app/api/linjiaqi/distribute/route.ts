@@ -86,6 +86,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // #271 双式记账：写入统一流水表
+    try {
+      const logAmount = operation === 'subtract' ? -amount : amount; // 扣减为负数
+      const description = operation === 'add' ? `后台增加 ${amount} 积分` :
+                         operation === 'subtract' ? `后台扣减 ${amount} 积分` :
+                         `配额划扣 ${amount} 积分`;
+      
+      await client.from('credit_logs').insert({
+        user_id: userId,
+        amount: logAmount,
+        balance_after: newCredits,
+        type: 'admin_adjust',
+        reference_id: `admin_${Date.now()}`,
+        description,
+        created_at: new Date().toISOString(),
+      });
+    } catch (logErr) {
+      console.error('#271 记录流水失败:', logErr);
+      // 不影响主流程
+    }
+
     // 记录操作历史到 recharge_records
     await client
       .from('recharge_records')

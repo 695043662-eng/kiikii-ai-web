@@ -171,6 +171,8 @@ exec_sql({ sql: "SELECT * FROM users" })
 | #276 | 生成失败积分返还不更新前端 | 双保险：后端await返还+前端timeout事件处理 | ✅ 已修复 | 核心必读 |
 | #277 | 管理后台拖动排序不生效+前端排序无效+默认模型 | 硬编码MODEL_SORT_ORDER覆盖+useSharedData默认值 | ✅ 已修复 | 核心必读 |
 | #278 | 积分双重返还（TOCTOU竞态） | refundCredits前必须重新getTaskResult+检查creditsRefunded | ✅ 已修复 | **核心必读** |
+| #279 | onError 连坐问题 | 使用 error.placeholderIds 精准定位失败占位符 | ✅ 已修复 | 核心必读 |
+| #280 | 再次生成积分不实时更新 | 复用 handleGenerate 统一入口 | ✅ 已修复 | 核心必读 |
 
 ---
 
@@ -3213,6 +3215,92 @@ if (existingMd5s.includes(result.md5)) {
 - `src/app/generate/page.tsx`
   - handleRegenerate 函数开头强制清空所有 State 和 Ref
   - 简化后续逻辑，删除重复清空代码
+
+### 状态
+✅ 已修复
+
+---
+
+## #279 onError 连坐问题（CRITICAL）⚠️ 必读
+
+**问题描述**：
+- 用户反馈："3张任务，2张成功，1张超时，结果2张成功的也被标记为超时失败"
+- onError 回调遍历所有 `clientTaskIds`，而非实际失败的占位符
+
+**根因分析**：
+```typescript
+// ❌ 原代码（第 3626 行）
+onError: (error) => {
+  clientTaskIds.forEach(id => {  // 遍历所有占位符，连坐！
+    markPlaceholderFailed(id, displayError);
+  });
+}
+```
+
+**修复方案**：
+使用 `error.placeholderIds` 精准定位失败的占位符：
+```typescript
+// ✅ 修复后
+onError: (error) => {
+  const failedIds = error.placeholderIds || clientTaskIds;  // 精准定位
+  console.log('[Canvas onError] 待标记失败的占位符:', failedIds);
+  failedIds.forEach(id => {
+    markPlaceholderFailed(id, displayError);
+  });
+}
+```
+
+**修改文件**：
+- `src/app/canvas/page.tsx` 第 3626-3642 行
+
+### 状态
+✅ 已修复
+
+---
+
+## #280 再次生成积分不实时更新（CRITICAL）⚠️ 必读
+
+**问题描述**：
+- 用户点击"再次生成"按钮，积分扣除没有实时显示
+- 最终积分正确，但过程不透明，用户无法感知扣费
+
+**根因分析**：
+```typescript
+// ❌ 原代码（第 2465 行）
+const response = await fetch('/api/image-to-image', {
+  method: 'POST',
+  body: JSON.stringify(requestBody),
+});
+// 没有 onCreditsDeducted 回调！
+```
+
+**修复方案**：
+复用 `handleGenerate` 统一入口，自动获得积分实时更新：
+```typescript
+// ✅ 修复后
+await handleGenerate({
+  prompt: task.params.prompt,
+  model: task.params.model,
+  // ...
+  onImageReceived: (data) => { /* 更新任务卡片 */ },
+  onComplete: (result) => { /* 保存历史记录 */ },
+  onError: (error) => { /* 错误处理 */ },
+});
+// handleGenerate 内部自动调用 setCredits，积分实时更新
+```
+
+**关键点**：
+- `handleGenerate` 内部定义了 `onCreditsDeducted` 回调
+- 自动调用 `setCredits(data.creditsBalance)` 更新积分
+- 无需外部传递 `onCreditsDeducted` 参数
+
+**修改文件**：
+- `src/app/generate/page.tsx` 第 2380-2550 行（重写 `handleRegenerate` 函数）
+
+**代码简化**：
+- 删除了 ~230 行 SSE 手动处理代码
+- 复用 `handleGenerate` 的统一入口
+- 自动获得：积分更新、轮询、错误处理、历史记录保存
 
 ### 状态
 ✅ 已修复

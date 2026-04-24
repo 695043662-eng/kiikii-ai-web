@@ -2397,7 +2397,6 @@ export default function SingleGeneratePage() {
     const creditCost = config.resolutions.find(r => r.size === task.params.resolution)?.credits || config.resolutions[0].credits;
     const requiredCredits = creditCost * regenerateCount;
 
-    // 【积分扣除已由 useGenService 统一处理，无需手动调用】
     // 检查积分是否足够
     if (credits < requiredCredits) {
       toast.error('积分不足', { description: `当前积分: ${credits}，需要: ${requiredCredits}` });
@@ -2446,163 +2445,128 @@ export default function SingleGeneratePage() {
     setSelectedTaskId(newTaskId);
     setSelectedImageIndex(0);
 
-    // 提交任务
+    // #280 修复：使用统一的 handleGenerate 入口，确保积分实时更新
+    // 参考图处理
+    const urls = originalRefUrls.length > 0 ? originalRefUrls : originalRefImages;
+    
     try {
-      // 【修复】使用原任务的参考图 URL
-      const urls = originalRefUrls.length > 0 ? originalRefUrls : originalRefImages;
-      const requestBody = {
-        taskId: newTaskId, // 传递前端生成的任务ID
+      await handleGenerate({
         prompt: task.params.prompt,
-        images: urls,
-        isUrls: true,
         model: task.params.model,
         resolution: task.params.resolution.toUpperCase(),
         aspectRatio: task.params.aspectRatio,
         generationCount: regenerateCount,
-        userId: userId, // 传递用户ID，用于Webhook回调保存到数据库
-      };
+        taskId: newTaskId,  // #047 关键修复：传递前端创建的任务ID
+        images: urls,
+        isUrls: urls.length > 0,
+        md5Hashes: originalRefMd5s,
 
-      const response = await fetch('/api/image-to-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
+        // 图片完成回调：更新任务卡片
+        onImageReceived: (data) => {
+          setTasks(prev => prev.map(t => {
+            if (t.id !== newTaskId) return t;
+            
+            const newImages = [...t.images];
+            const newImageKeys = [...(t.imageKeys || [])];
+            if (data.index !== undefined) {
+              while (newImages.length <= data.index) {
+                newImages.push('');
+              }
+              while (newImageKeys.length <= data.index) {
+                newImageKeys.push('');
+              }
+              newImages[data.index] = data.url;
+              if (data.key) {
+                newImageKeys[data.index] = data.key;
+              }
+            } else {
+              newImages.push(data.url);
+              if (data.key) {
+                newImageKeys.push(data.key);
+              }
+            }
+            
+            const newItemStatuses = [...t.itemStatuses];
+            if (data.index !== undefined && data.index < newItemStatuses.length) {
+              newItemStatuses[data.index] = data.status === 'failed' ? 'failed' : 'completed';
+            }
+            
+            const newItemErrors = [...t.itemErrors];
+            if (data.error && data.index !== undefined && data.index < newItemErrors.length) {
+              newItemErrors[data.index] = data.error;
+            }
+            
+            return { ...t, images: newImages, imageKeys: newImageKeys, itemStatuses: newItemStatuses, itemErrors: newItemErrors };
+          }));
+        },
+
+        // 完成回调：更新最终状态
+        onComplete: (result) => {
+          console.log('[再次生成] 完成:', result);
+          
+          setTasks(prev => {
+            const updatedTasks = prev.map(t => {
+              if (t.id !== newTaskId) return t;
+              
+              const { orderedImages, newItemStatuses, newItemErrors } = processImageItemsWithDeletedFilter(
+                t,
+                result.imageUrls || [],
+                result.imageItems,
+                result.errors,
+                undefined
+              );
+
+              return {
+                ...t,
+                status: (orderedImages.length > 0 ? 'completed' : 'failed') as 'completed' | 'failed',
+                images: orderedImages,
+                itemStatuses: newItemStatuses,
+                itemErrors: newItemErrors,
+                creditsCharged: result.creditsCharged ?? t.creditsCharged,
+                creditsBalanceAfter: result.creditsBalance ?? t.creditsBalanceAfter,
+              };
+            });
+            
+            // 保存历史记录
+            if (result.imageUrls && result.imageUrls.length > 0) {
+              saveHistoryRecord({
+                taskId: newTaskId,
+                model: newTask.params.model,
+                prompt: newTask.params.prompt,
+                images: result.imageUrls,
+                imageKeys: result.imageKeys || [],
+                referenceImages: originalRefUrls,
+                referenceImageMd5s: originalRefMd5s,
+                resolution: newTask.params.resolution,
+                aspectRatio: newTask.params.aspectRatio,
+                creditsCharged: result.creditsCharged || requiredCredits,
+                source: 'regenerate',
+              });
+              console.log(`[再次生成] #280 保存历史记录: taskId=${newTaskId}, images=${result.imageUrls.length}, creditsCharged=${result.creditsCharged}`);
+            }
+            
+            return updatedTasks;
+          });
+        },
+
+        // 错误回调
+        onError: (error) => {
+          console.error('[再次生成] 错误:', error);
+          setTasks(prev => prev.map(t => {
+            if (t.id !== newTaskId) return t;
+            return {
+              ...t,
+              status: 'failed',
+              error: error.message,
+              itemStatuses: t.itemStatuses.map(() => 'failed'),
+              itemErrors: t.itemErrors.map(() => error.message),
+            };
+          }));
+          toast.error('生成失败', { description: error.message });
+        },
       });
 
-      if (response.ok) {
-        setSubmittedTaskIds(prev => new Set(prev).add(newTaskId));
-      }
-
-      const contentType = response.headers.get('content-type');
-      
-      if (contentType?.includes('text/event-stream')) {
-        const reader = response.body?.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        
-        // #237 修复：使用局部变量累积图片，避免闭包陷阱
-        const collectedImages: string[] = [];
-        const collectedKeys: string[] = [];
-
-        const processLine = (line: string) => {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              
-              if (data.type === 'image' && data.url) {
-                // #237: 同时累积到局部变量（用于保存历史记录）
-                if (data.index !== undefined) {
-                  while (collectedImages.length <= data.index) {
-                    collectedImages.push('');
-                    collectedKeys.push('');
-                  }
-                  collectedImages[data.index] = data.url;
-                  if (data.key) collectedKeys[data.index] = data.key;
-                } else {
-                  collectedImages.push(data.url);
-                  if (data.key) collectedKeys.push(data.key);
-                }
-                
-                setTasks(prev => prev.map(t => {
-                  if (t.id === newTaskId) {
-                    // #106 修复：按 index 插入图片，确保与 itemStatuses 顺序一致
-                    const newImages = [...t.images];
-                    if (data.index !== undefined) {
-                      while (newImages.length <= data.index) {
-                        newImages.push('');
-                      }
-                      newImages[data.index] = data.url;
-                    } else {
-                      newImages.push(data.url);
-                    }
-                    const newItemStatuses = [...t.itemStatuses];
-                    if (data.index !== undefined && data.index < newItemStatuses.length) {
-                      newItemStatuses[data.index] = 'completed';
-                    }
-                    return { ...t, images: newImages, itemStatuses: newItemStatuses };
-                  }
-                  return t;
-                }));
-              } else if (data.type === 'error' && data.index !== undefined) {
-                setTasks(prev => prev.map(t => {
-                  if (t.id === newTaskId) {
-                    const newItemStatuses = [...t.itemStatuses];
-                    const newItemErrors = [...t.itemErrors];
-                    if (data.index < newItemStatuses.length) {
-                      newItemStatuses[data.index] = 'failed';
-                      newItemErrors[data.index] = data.error || '生成失败';
-                    }
-                    return { ...t, itemStatuses: newItemStatuses, itemErrors: newItemErrors };
-                  }
-                  return t;
-                }));
-              } else if (data.type === 'error' && data.taskId) {
-                // 处理全局错误（所有图片都失败）
-                console.log('收到全局error事件:', data);
-                setTasks(prev => prev.map(t => {
-                  if (t.id === newTaskId) {
-                    // 标记所有未完成的图片为失败
-                    const newItemStatuses = t.itemStatuses.map(status => 
-                      status === 'generating' ? 'failed' : status
-                    );
-                    const newItemErrors = t.itemErrors.map((err, idx) => 
-                      t.itemStatuses[idx] === 'generating' ? (data.error || '生成失败') : err
-                    );
-                    return { 
-                      ...t, 
-                      itemStatuses: newItemStatuses, 
-                      itemErrors: newItemErrors,
-                      status: 'completed'
-                    };
-                  }
-                  return t;
-                }));
-              } else if (data.type === 'done') {
-                // #237 修复：先更新状态（纯函数），副作用在 setTasks 外部执行
-                setTasks(prev => prev.map(t => {
-                  if (t.id === newTaskId) {
-                    return { ...t, status: 'completed' as const };
-                  }
-                  return t;
-                }));
-                
-                // #237 修复：在 setTasks 外部调用保存（副作用），使用局部累积变量
-                // 直接使用局部变量，不依赖 tasks 状态（避免异步陷阱）
-                if (collectedImages.length > 0) {
-                  saveHistoryRecord({
-                    taskId: newTaskId,
-                    model: newTask.params.model,
-                    prompt: newTask.params.prompt,
-                    images: collectedImages,
-                    imageKeys: collectedKeys,
-                    referenceImages: originalRefUrls,
-                    referenceImageMd5s: originalRefMd5s,  // #242 新增：保存参考图 MD5
-                    resolution: newTask.params.resolution,
-                    aspectRatio: newTask.params.aspectRatio,
-                    creditsCharged: requiredCredits,  // 使用预计算的积分值
-                    source: 'regenerate',
-                  });
-                  console.log(`[再次生成] #242 保存历史记录: taskId=${newTaskId}, images=${collectedImages.length}, refMd5s=${originalRefMd5s.length}, creditsCharged=${requiredCredits}`);
-                }
-              }
-            } catch (e) {
-              console.error('解析数据失败:', e);
-            }
-          }
-        };
-
-        while (reader) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-          
-          for (const line of lines) {
-            if (line.trim()) processLine(line);
-          }
-        }
-      }
+      setSubmittedTaskIds(prev => new Set(prev).add(newTaskId));
     } catch (error) {
       console.error('重新生成失败:', error);
       toast.error('重新生成失败，请重试');

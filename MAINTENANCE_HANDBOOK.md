@@ -182,6 +182,7 @@ exec_sql({ sql: "SELECT * FROM users" })
 | #287 | 生图发送到画布缺少 imageKey | sessionStorage 传递 imageKey + 画布读取使用 | ✅ 已修复 | **核心必读** |
 | #288 | GET超时返还逻辑错误 | 数学结算逻辑替代状态统计 | ✅ 已修复 | **核心必读** |
 | #289 | 删除图片刷新后恢复 | 元素删除立即保存localStorage | ✅ 已修复 | |
+| #290 | 占位符像素密度低 | placeholderBaseSize /4 → /2 | ✅ 已修复 | |
 
 ---
 
@@ -5021,6 +5022,50 @@ WHERE reference_id IS NOT NULL;
 1. **检查-执行模式无法防止并发**：必须有数据库层面的唯一约束
 2. **先插入再更新**：确保只有插入成功的请求才会更新积分
 3. **所有防重机制最终依赖数据库约束**：应用层的锁都不可靠
+
+---
+
+### 状态
+✅ 已修复
+
+---
+
+## #290 占位符像素密度低
+
+**问题描述**：
+占位符在画布上展示的尺寸太小，导致图片填充进来后像素密度低，看起来模糊。
+
+**根因分析**：
+- `placeholderBaseSize = 容器短边 / 4`
+- 占位符画布尺寸小 → 图片填充后画布尺寸也小
+- zoom 缩放后视觉大小正常，但实际像素少，清晰度低
+
+**修复方案**：
+占位符画布尺寸翻倍，视觉大小由 zoom 自动调整保持不变，像素密度提高。
+
+```typescript
+// canvas-image-layout.ts 第190行
+
+// 修改前
+const placeholderBaseSize = Math.min(containerWidth, containerHeight) / 4;
+
+// 修改后（画布尺寸翻倍，像素密度提高）
+const placeholderBaseSize = Math.min(containerWidth, containerHeight) / 2;
+```
+
+**效果对比**：
+
+| 项目 | 修改前 | 修改后 |
+|------|--------|--------|
+| 占位符画布尺寸 | 500px | 1000px |
+| zoom | 0.5 | 0.25 |
+| 视觉大小（屏幕像素） | 250px | 250px（不变） |
+| 图片实际像素 | 500x500 | 1000x1000 |
+| 清晰度 | 一般 | 更清晰 |
+
+**修改文件**：
+- `src/lib/canvas-image-layout.ts`
+  - placeholderBaseSize 从 /4 改为 /2
 
 ---
 

@@ -186,8 +186,8 @@ export function calculateImageGroupLayout(input: LayoutInput): LayoutResult {
   
   // 4. 计算初始单元格尺寸
   // 🔧 #219 修复：占位符大小不依赖 zoom，使用容器尺寸固定比例
-  // 无限画布黄金法则：实体大小不反向依赖摄像机焦距（Zoom）
-  const placeholderBaseSize = Math.min(safeContainerWidth, safeContainerHeight) / 4;
+  // 🔧 #290 优化：占位符画布尺寸翻倍，像素密度提高，视觉大小不变
+  const placeholderBaseSize = Math.min(safeContainerWidth, safeContainerHeight) / 2;
   
   // 如果有图片尺寸，取最大边作为基准
   let baseCellSize: number;

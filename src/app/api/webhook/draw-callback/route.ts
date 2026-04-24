@@ -4,7 +4,7 @@ import { uploadToCOS, getSignedUrl } from '@/lib/cos';
 import { getSupabaseClient } from '@/storage/database/supabase-client';
 import { safeErrorLog, safeLog } from '@/lib/errorHandler';
 import { loadTaskMapping, deleteTaskMapping } from '@/lib/taskMapping';
-import { refundCredits } from '@/lib/credits';
+import { handlePartialRefund } from '@/lib/credits';
 import fs from 'fs';
 import path from 'path';
 
@@ -481,32 +481,26 @@ export async function POST(request: NextRequest) {
           
           console.log(`[Webhook] 更新失败状态: ${mainTaskId}, index: ${itemIndex}, 进度: ${completedCount}/${generationCount}`);
           
-          // ⚠️ 积分补偿：当所有任务完成时，退还失败部分的积分
-          // #277 修复：必须先获取最新状态，再检查 creditsRefunded，防止双重返还
-          const latestResultForWebhookRefund = getTaskResult(mainTaskId);
-          // #155 防止积分重复返还
-          if (isAllCompleted && mappingResult.userId && !latestResultForWebhookRefund?.creditsRefunded) {
-            const failedCount = imageItems.filter(i => i.status === 'failed').length;
+          // ====== #282 统一积分返还 ======
+          if (isAllCompleted && mappingResult.userId) {
             const creditsPerImage = mappingResult.requestParams?.creditsPerImage || 0;
+            const generationCount = mappingResult.requestParams?.generationCount || imageItems.length;
             
-            if (failedCount > 0 && creditsPerImage > 0) {
-              const refundAmount = failedCount * creditsPerImage;
-              console.log(`[积分补偿] Webhook失败回调：${failedCount}/${generationCount} 张失败，退还 ${refundAmount} 积分`);
-              refundCredits(mappingResult.userId, refundAmount, mainTaskId, `Webhook回调：${failedCount}张图片失败`)
-                .then(result => {
-                  if (result.success) {
-                    console.log(`[积分补偿] Webhook退还成功，剩余 ${result.remaining} 积分`);
-                    // #155 标记已返还，防止重复
-                    const currentResult = getTaskResult(mainTaskId);
-                    if (currentResult) {
-                      setTaskResult(mainTaskId, { ...currentResult, creditsRefunded: true });
-                    }
-                  } else {
-                    console.error(`[积分补偿] Webhook退还失败: ${result.error}`);
-                  }
-                })
-                .catch(err => console.error(`[积分补偿] Webhook退还异常:`, err));
-            }
+            // 使用统一的返还函数
+            handlePartialRefund(
+              getTaskResult,
+              setTaskResult,
+              mainTaskId,
+              imageItems,
+              generationCount,
+              creditsPerImage,
+              mappingResult.userId,
+              `Webhook回调：部分图片失败`
+            ).then(result => {
+              if (result.success) {
+                console.log(`[积分补偿] #282 Webhook退还成功，剩余 ${result.newBalance} 积分`);
+              }
+            }).catch(err => console.error(`[积分补偿] #282 Webhook退还异常:`, err));
           }
         }
       } else {

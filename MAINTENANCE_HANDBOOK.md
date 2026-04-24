@@ -173,6 +173,8 @@ exec_sql({ sql: "SELECT * FROM users" })
 | #278 | 积分双重返还（TOCTOU竞态） | refundCredits前必须重新getTaskResult+检查creditsRefunded | ✅ 已修复 | **核心必读** |
 | #279 | onError 连坐问题 | 使用 error.placeholderIds 精准定位失败占位符 | ✅ 已修复 | 核心必读 |
 | #280 | 再次生成积分不实时更新 | 复用 handleGenerate 统一入口 | ✅ 已修复 | 核心必读 |
+| #281 | 熔断器阈值太低 | failureThreshold: 5 → 10 | ✅ 已修复 | 核心必读 |
+| #282 | 积分返还逻辑分散导致漏返 | 统一 handlePartialRefund 函数 | ✅ 已修复 | **核心必读** |
 
 ---
 
@@ -3219,6 +3221,101 @@ if (existingMd5s.includes(result.md5)) {
 ### 状态
 ✅ 已修复
 
+---
+
+## #282 积分返还逻辑分散导致漏返（CRITICAL）⚠️ 必读
+
+**问题描述**：
+- 用户反馈积分返还失败，部分失败场景下积分未返还
+- 原因：积分返还逻辑散落在 6 个不同位置，代码重复且逻辑不一致
+
+**根因分析**：
+```
+原返还逻辑分布（问题）：
+├─ 点1: 所有图片提交失败（第1103行）
+├─ 点2: SSE部分失败（第1208行）
+├─ 点3: 任务全部失败（第1270行）
+├─ 点4: SSE完成时提取失败（第1317行）
+├─ 点5: 超时场景（第1420行）
+└─ 点6: webhook回调（第488行）
+
+问题：
+1. 部分失败时 status='completed'，不进入失败返还逻辑
+2. 各点使用闭包旧变量 `currentResult`，可能已过期
+3. 代码重复，难以维护
+```
+
+**修复方案**：
+提取统一的 `handlePartialRefund` 函数，所有返还逻辑集中到一个入口：
+
+```typescript
+// lib/credits.ts
+export async function handlePartialRefund(
+  getTaskResultFn: (taskId: string) => any,
+  setTaskResultFn: (taskId: string, result: any) => void,
+  taskId: string,
+  imageItems: Array<{ index: number; status: string; error?: string | null }>,
+  generationCount: number,
+  creditsPerImage: number,
+  userId: string,
+  reason: string = '部分图片失败'
+): Promise<{ success: boolean; refundAmount: number; newBalance: number | null }> {
+  // Step 1: 获取最新状态
+  const latestResult = getTaskResultFn(taskId);
+  
+  // Step 2: 防重检查
+  if (latestResult?.creditsRefunded) {
+    return { success: false, refundAmount: 0, newBalance: null };
+  }
+  
+  // Step 3: 计算失败数量
+  const failedCount = imageItems.filter(item => item.status === 'failed').length;
+  
+  // Step 4: 无失败则跳过
+  if (failedCount === 0) return { success: false, refundAmount: 0, newBalance: null };
+  
+  // Step 5: 执行返还
+  const refundAmount = failedCount * creditsPerImage;
+  const refundResult = await refundCredits(userId, refundAmount, taskId, reason);
+  
+  // Step 6: 标记已返还
+  if (refundResult.success) {
+    const afterRefundResult = getTaskResultFn(taskId);
+    setTaskResultFn(taskId, { ...afterRefundResult, creditsRefunded: true });
+  }
+  
+  return { success: refundResult.success, refundAmount, newBalance: refundResult.remaining };
+}
+```
+
+**调用方式**：
+```typescript
+// 所有返还点统一调用
+const refundResult = await handlePartialRefund(
+  getTaskResult,
+  setTaskResult,
+  taskId,
+  imageItems,
+  generationCount,
+  creditsPerImage,
+  userId,
+  '返还原因'
+);
+```
+
+**修改文件**：
+- `src/lib/credits.ts`：新增 `handlePartialRefund` 函数
+- `src/app/api/image-to-image/route.ts`：替换 5 处返还逻辑
+- `src/app/api/webhook/draw-callback/route.ts`：替换 1 处返还逻辑
+
+**核心优势**：
+1. **全局唯一入口**：所有积分返还必须通过此函数
+2. **自带防重**：内置 `creditsRefunded` 检查，多次调用安全
+3. **原子操作**：获取最新状态 → 检查 → 返还 → 标记
+4. **易于维护**：只需维护一个函数
+
+### 状态
+✅ 已修复（2025-01）
 ---
 
 ## #279 onError 连坐问题（CRITICAL）⚠️ 必读

@@ -517,3 +517,74 @@ export async function addCredits(
     };
   }
 }
+
+/**
+ * #282 统一积分返还函数
+ * 
+ * 核心原则：
+ * 1. 全局唯一入口：所有积分返还必须通过此函数
+ * 2. 自带防重：内置 creditsRefunded 检查
+ * 3. 原子操作：获取最新状态 → 检查 → 返还 → 标记
+ * 
+ * @param getTaskResultFn - 获取任务结果的函数（从调用方传入，避免循环依赖）
+ * @param setTaskResultFn - 设置任务结果的函数（从调用方传入，避免循环依赖）
+ * @returns 返还后的积分余额，如果无需返还则返回 null
+ */
+export async function handlePartialRefund(
+  getTaskResultFn: (taskId: string) => any,
+  setTaskResultFn: (taskId: string, result: any) => void,
+  taskId: string,
+  imageItems: Array<{ index: number; status: string; error?: string | null }>,
+  generationCount: number,
+  creditsPerImage: number,
+  userId: string,
+  reason: string = '部分图片失败'
+): Promise<{ success: boolean; refundAmount: number; newBalance: number | null }> {
+  // Step 1: 获取最新状态（防止使用闭包旧变量）
+  const latestResult = getTaskResultFn(taskId);
+  
+  // Step 2: 防重检查（已返还则直接返回）
+  if (latestResult?.creditsRefunded) {
+    console.log(`[积分补偿] #282 ${taskId} 已返还过，跳过`);
+    return { success: false, refundAmount: 0, newBalance: null };
+  }
+  
+  // Step 3: 计算失败数量
+  const failedCount = imageItems.filter(item => item.status === 'failed').length;
+  
+  // Step 4: 无失败则无需返还
+  if (failedCount === 0) {
+    console.log(`[积分补偿] #282 ${taskId} 无失败图片，无需返还`);
+    return { success: false, refundAmount: 0, newBalance: null };
+  }
+  
+  // Step 5: 计算返还金额
+  const refundAmount = failedCount * creditsPerImage;
+  console.log(`[积分补偿] #282 ${taskId} 开始返还: ${failedCount}/${generationCount} 张失败，退还 ${refundAmount} 积分，原因: ${reason}`);
+  
+  // Step 6: 执行返还
+  try {
+    const refundResult = await refundCredits(userId, refundAmount, taskId, reason);
+    
+    if (refundResult.success) {
+      // Step 7: 标记已返还（必须重新获取最新状态）
+      const afterRefundResult = getTaskResultFn(taskId);
+      if (afterRefundResult) {
+        setTaskResultFn(taskId, { ...afterRefundResult, creditsRefunded: true });
+      }
+      
+      console.log(`[积分补偿] #282 ${taskId} 返还成功，剩余 ${refundResult.remaining} 积分`);
+      return { 
+        success: true, 
+        refundAmount, 
+        newBalance: refundResult.remaining ?? null 
+      };
+    } else {
+      console.error(`[积分补偿] #282 ${taskId} 返还失败: ${refundResult.error}`);
+      return { success: false, refundAmount: 0, newBalance: null };
+    }
+  } catch (err) {
+    console.error(`[积分补偿] #282 ${taskId} 返还异常:`, err);
+    return { success: false, refundAmount: 0, newBalance: null };
+  }
+}

@@ -126,6 +126,7 @@
 | #265 | 模型 Logo 替换为 Gemini/GPT 专用图标 | 替换文件，尺寸统一 150×150 | ✅ 已修复 | |
 | #266 | 管理后台拖动排序不影响前端显示 | syncToApiModels 函数添加 sort_order 同步 | ✅ 已修复 | |
 | #267 | Webhook 失败未返还积分 | requestParams 存 userId + 状态标记补全 | ✅ 已修复 | 核心必读 |
+| #268 | 所有图片提交失败不返还积分 | SSE分支直接break跳过积分返还逻辑 | ✅ 已修复 | 核心必读 |
 
 ---
 
@@ -3170,6 +3171,82 @@ if (existingMd5s.includes(result.md5)) {
   - 简化后续逻辑，删除重复清空代码
 
 ### 状态
+✅ 已修复
+
+---
+
+## #268 所有图片提交失败不返还积分（CRITICAL）
+
+**问题**：用户提交生图任务后，所有图片都失败（如内容违规），但积分没有返还
+
+**根因分析**：
+在 `route.ts` 的 SSE 循环中，有两个失败处理分支：
+
+1. **分支 A（第 1086-1108 行）**：`failedCount >= generationCount`（所有图片提交失败）
+   - 发送 `error` 事件
+   - 更新状态为 `failed`
+   - **直接 `break` 退出循环**
+   - ❌ 没有返还积分！
+
+2. **分支 B（第 1219-1256 行）**：`currentResult.status === 'failed'`
+   - 会返还积分
+   - 但由于分支 A 已经 `break`，永远不会执行到
+
+**代码路径**：
+```
+所有图片失败 → 分支 A (break) → 跳出循环 → 分支 B 永远不执行 → 积分不返还
+```
+
+**修复方案**：
+在分支 A 中添加积分返还逻辑（与分支 B 相同的逻辑）：
+
+```typescript
+// 检查是否所有图片都提交失败
+if (failedCount >= generationCount) {
+  const errorMsg = errors.map(e => e.error).join('; ');
+  
+  // ====== #268 修复：所有图片提交失败时，必须返还积分 ======
+  let creditsBalanceAfter = creditsBalanceAfterDeduct;
+  const currentResult = getTaskResult(actualTaskId);
+  
+  // #155 防止积分重复返还
+  if (creditsDeducted && actualUserId && creditsPerImage > 0 && !currentResult?.creditsRefunded) {
+    const refundAmount = generationCount * creditsPerImage;
+    console.log(`[积分补偿] 所有图片提交失败，退还 ${refundAmount} 积分`);
+    try {
+      const refundResult = await refundCredits(actualUserId, refundAmount, actualTaskId, `所有图片提交失败`);
+      if (refundResult.success) {
+        creditsBalanceAfter = refundResult.remaining ?? null;
+        console.log(`[积分补偿] 全额退还成功，剩余 ${creditsBalanceAfter} 积分`);
+        // #155 标记已返还，防止重复
+        const latestResult = getTaskResult(actualTaskId);
+        if (latestResult) {
+          setTaskResult(actualTaskId, { ...latestResult, creditsRefunded: true });
+        }
+      }
+    } catch (err) {
+      console.error(`[积分补偿] 全额退还异常:`, err);
+    }
+  }
+  
+  // 发送 error 事件（包含积分信息）
+  if (!isControllerClosed) {
+    sendEvent({ 
+      type: 'error', 
+      taskId: actualTaskId,
+      error: `所有图片提交失败: ${errorMsg}`,
+      creditsRefunded: generationCount * creditsPerImage,
+      creditsBalance: creditsBalanceAfter,
+    });
+  }
+  // ... 其余代码
+}
+```
+
+**修改文件**：
+- `src/app/api/image-to-image/route.ts`（第 1086-1130 行）
+
+**状态**
 ✅ 已修复
 
 ---

@@ -1085,15 +1085,43 @@ export async function POST(request: NextRequest) {
             // 检查是否所有图片都提交失败（异步填充的 errors 在轮询中被检测到）
             if (failedCount >= generationCount) {
               const errorMsg = errors.map(e => e.error).join('; ');
+              
+              // ====== #268 修复：所有图片提交失败时，必须返还积分 ======
+              let creditsBalanceAfter = creditsBalanceAfterDeduct;
+              const currentResult = getTaskResult(actualTaskId);
+              
+              // #155 防止积分重复返还
+              if (creditsDeducted && actualUserId && creditsPerImage > 0 && !currentResult?.creditsRefunded) {
+                const refundAmount = generationCount * creditsPerImage;
+                console.log(`[积分补偿] 所有图片提交失败，退还 ${refundAmount} 积分`);
+                try {
+                  const refundResult = await refundCredits(actualUserId, refundAmount, actualTaskId, `所有图片提交失败`);
+                  if (refundResult.success) {
+                    creditsBalanceAfter = refundResult.remaining ?? null;
+                    console.log(`[积分补偿] 全额退还成功，剩余 ${creditsBalanceAfter} 积分`);
+                    // #155 标记已返还，防止重复
+                    const latestResult = getTaskResult(actualTaskId);
+                    if (latestResult) {
+                      setTaskResult(actualTaskId, { ...latestResult, creditsRefunded: true });
+                    }
+                  } else {
+                    console.error(`[积分补偿] 全额退还失败: ${refundResult.error}`);
+                  }
+                } catch (err) {
+                  console.error(`[积分补偿] 全额退还异常:`, err);
+                }
+              }
+              
               if (!isControllerClosed) {
                 sendEvent({ 
                   type: 'error', 
                   taskId: actualTaskId,
-                  error: `所有图片提交失败: ${errorMsg}`
+                  error: `所有图片提交失败: ${errorMsg}`,
+                  creditsRefunded: generationCount * creditsPerImage,
+                  creditsBalance: creditsBalanceAfter,
                 });
               }
               console.log(`[SSE] 所有图片提交失败: ${actualTaskId}`);
-              const currentResult = getTaskResult(actualTaskId);
               if (currentResult) {
                 setTaskResult(actualTaskId, {
                   ...currentResult,

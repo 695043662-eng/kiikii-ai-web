@@ -179,6 +179,7 @@ exec_sql({ sql: "SELECT * FROM users" })
 | #284 | GET接口超时未返还积分 | 5分钟超时检测 + 自动返还机制 | ✅ 已修复 | **核心必读** |
 | #285 | 并发请求导致重复返还 | 数据库唯一约束 + on_conflict参数 | ✅ 已修复 | **核心必读** |
 | #286 | refundCredits 并发安全 | 先插入日志再更新积分 + 唯一约束检测 | ✅ 已修复 | **核心必读** |
+| #287 | 生图发送到画布缺少 imageKey | sessionStorage 传递 imageKey + 画布读取使用 | ✅ 已修复 | **核心必读** |
 
 ---
 
@@ -5023,4 +5024,88 @@ WHERE reference_id IS NOT NULL;
 
 ### 状态
 ✅ 已修复（需要在 Supabase 控制台执行唯一约束 SQL）
+
+---
+
+## #287 生图发送到画布缺少 imageKey（CRITICAL）
+
+**发现时间**：2026-04-24
+
+**问题现象**：
+用户从生图页面点击"发送到画布"按钮后，图片显示正常，但刷新页面后图片丢失。
+
+**日志证据**：
+```
+[Canvas] 图片缺少 imageKey 和 dbId，刷新后可能丢失: awgej66ee
+```
+
+**根因分析**：
+"发送到画布"功能在 sessionStorage 中只存储了 `imageUrl` 和 `prompt`，没有存储 `imageKey`。
+
+**数据流追踪**：
+```
+生图页面 (generate/page.tsx)
+  ↓ sessionStorage.setItem('generateToSend', { imageUrl, prompt })  ← ❌ 缺少 imageKey
+画布页面 (canvas/page.tsx)
+  ↓ const { imageUrl, prompt } = JSON.parse(data)  ← 没有 imageKey
+  ↓ canvas.addElement({ ..., imageKey: undefined })  ← ❌ 导致问题
+  ↓ localStorage 保存时警告：图片缺少 imageKey 和 dbId
+  ↓ 刷新后图片丢失
+```
+
+**修复方案**：
+1. 生图页面：在 sessionStorage 中添加 `imageKey`
+2. 画布页面：读取并使用 `imageKey`
+
+**修复代码**：
+```javascript
+// 生图页面 (generate/page.tsx)
+sessionStorage.setItem('generateToSend', JSON.stringify({
+  imageUrl: currentImageUrl,
+  imageKey: selectedTask.imageKeys?.[selectedImageIndex] || null,  // 新增
+  prompt: selectedTask.params?.prompt || '',
+}));
+
+// 画布页面 (canvas/page.tsx)
+const { imageUrl, imageKey, prompt } = JSON.parse(data);
+
+const addSingleImageToCanvas = async (imgUrl: string, imgKey: string | null, promptText: string) => {
+  // ...
+  canvas.addElement({
+    // ...
+    imageKey: imgKey || undefined,  // 新增
+    // ...
+  });
+};
+
+addSingleImageToCanvas(imageUrl, imageKey || null, prompt || '');
+```
+
+**修改文件**：
+- `src/app/generate/page.tsx`
+  - 第 2881-2891 行：sessionStorage 添加 imageKey
+- `src/app/canvas/page.tsx`
+  - 第 3844 行：解构 imageKey
+  - 第 3848 行：addSingleImageToCanvas 添加 imgKey 参数
+  - 第 4001 行：canvas.addElement 添加 imageKey
+  - 第 4024 行：调用时传递 imageKey
+
+**关联场景对比**：
+
+| 场景 | 是否设置 imageKey/dbId | 状态 |
+|------|------------------------|------|
+| 上传图片 | ✅ 设置 `dbId`（IndexedDB） | 正常 |
+| 画布内生成 | ✅ 设置 `imageKey`（COS） | 正常 |
+| 分割图片 | ✅ 初始 undefined，后台更新 | 正常 |
+| **生图发送到画布** | ✅ 设置 `imageKey`（COS） | **已修复** |
+
+**教训总结**：
+1. **图片持久化必须有唯一标识**：`imageKey`（COS）或 `dbId`（IndexedDB）
+2. **跨页面传递图片时要传递完整信息**：不能只传 URL，还要传持久化 key
+3. **刷新丢失问题通常是持久化缺失**：检查是否有正确的 key 存储
+
+---
+
+### 状态
+✅ 已修复
 

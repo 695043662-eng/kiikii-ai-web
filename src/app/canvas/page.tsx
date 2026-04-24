@@ -3841,11 +3841,13 @@ function CanvasApp({ canvas, router }: { canvas: CanvasContextType; router: Retu
     const data = sessionStorage.getItem('generateToSend');
     if (data) {
       try {
-        const { imageUrl, prompt } = JSON.parse(data);
+        // #287 修复：读取 imageKey，确保刷新后图片不丢失
+        const { imageUrl, imageKey, prompt } = JSON.parse(data);
         sessionStorage.removeItem('generateToSend');
         
         // 使用统一的添加图片逻辑（与生图、上传共享）
-        const addSingleImageToCanvas = async (imgUrl: string, promptText: string) => {
+        // #287: 添加 imageKey 参数
+        const addSingleImageToCanvas = async (imgUrl: string, imgKey: string | null, promptText: string) => {
           // 获取视口信息
           if (!canvasContainerRef.current) return;
           const container = canvasContainerRef.current;
@@ -3998,6 +4000,7 @@ function CanvasApp({ canvas, router }: { canvas: CanvasContextType; router: Retu
             visible: true,
             locked: false,
             imageUrl: imgUrl,
+            imageKey: imgKey || undefined,  // #287: 添加 imageKey，确保刷新后图片不丢失
             aspectRatio: width / height,
             sourceType: 'generate',
             sourcePrompt: promptText,
@@ -4018,10 +4021,11 @@ function CanvasApp({ canvas, router }: { canvas: CanvasContextType; router: Retu
           setZoom(finalPanZoom);
           setPan({ x: newPanX, y: newPanY });
           
-          console.log('[生图发送] 添加图片到画布:', Math.round(width), 'x', Math.round(height), '| zoom:', finalPanZoom.toFixed(2));
+          console.log('[生图发送] 添加图片到画布:', Math.round(width), 'x', Math.round(height), '| zoom:', finalPanZoom.toFixed(2), '| imageKey:', imgKey || '无');
         };
         
-        addSingleImageToCanvas(imageUrl, prompt || '');
+        // #287: 传递 imageKey 参数
+        addSingleImageToCanvas(imageUrl, imageKey || null, prompt || '');
       } catch (error) {
         console.error('Failed to load image from generate page:', error);
       }

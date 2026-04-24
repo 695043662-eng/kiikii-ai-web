@@ -2630,7 +2630,7 @@ export default function SingleGeneratePage() {
               onClick={() => setShowModelPicker(true)}
             >
               <div className="flex items-center gap-2">
-                <img src="/model-logo.png" alt="" className="w-5 h-5 rounded" />
+                <img src={model === 'gpt-image-2' ? '/gpt-image-2-logo.png' : '/model-logo.png'} alt="" className="w-5 h-5 rounded" />
                 <span className="text-gray-900 dark:text-white font-mono">{modelDisplayNames[model] || formatModelName(model)}</span>
                 {/* 使用 modelActiveStatus 显示在线状态（绿色=在线，红色=离线） */}
                 <span className={modelActiveStatus[model] !== false ? 'text-green-500' : 'text-red-500'}>

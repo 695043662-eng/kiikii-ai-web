@@ -361,6 +361,14 @@ async function sendToTerminalInternal(
     };
   }
   
+  // #260 说明：只返回任务 ID 的情况，依赖 webhook 回调更新缓存
+  // 不在这里轮询，因为：
+  // 1. 轮询会阻塞 sendToTerminal 返回，导致 .then() 回调延迟执行
+  // 2. 已配置 webhook URL，服务器会在完成后回调
+  // 3. Webhook 会更新缓存，前端轮询检测到更新后发送 image 事件
+  
+  console.log(`[Terminal] 只返回任务 ID: ${result.terminalTaskId}，等待 webhook 回调`);
+  
   return result;
 }
 
@@ -961,8 +969,13 @@ export async function POST(request: NextRequest) {
                 
                 imageUrls[index] = result.sseResult.imageUrls[0] || null;
                 imageKeys[index] = result.sseResult.imageKeys[0] || null;
+              } else if (result.terminalTaskId) {
+                // #260 修复：有 terminalTaskId 但没有 sseResult，说明任务已提交
+                // 等待 webhook 回调更新缓存，前端轮询会检测到更新
+                console.log(`[SSE] 第 ${index + 1} 张图片任务已提交: ${result.terminalTaskId}，等待 webhook 回调`);
+                submittedCount++;
               } else {
-                // 🔧 #207 诊断日志：终端返回成功但没有图片
+                // 🔧 #207 诊断日志：终端返回成功但没有图片，也没有任务 ID
                 console.warn(`[SSE] ⚠️ 第 ${index + 1} 张图片终端返回成功但没有图片:`, {
                   terminalTaskId: result.terminalTaskId,
                   hasSseResult: !!result.sseResult,
@@ -970,7 +983,7 @@ export async function POST(request: NextRequest) {
                   imageKeysLength: result.sseResult?.imageKeys?.length || 0,
                 });
                 
-                // 🔧 #207 修复：终端返回成功但没有图片，应该标记为失败
+                // 🔧 #207 修复：终端返回成功但没有图片，也没有任务 ID，标记为失败
                 failedCount++;
                 errors.push({ index, error: '终端返回空结果' });
                 

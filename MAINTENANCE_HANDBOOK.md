@@ -119,6 +119,7 @@
 | #258 | 占位符比例不一致（1:1变3:4填灰） | onComplete 调用 updatePlaceholder 复用尺寸计算 | ✅ 已修复 | 核心必读 |
 | #259 | 展示/启用按钮失效 | 废除 hidden-models.json，全线回归数据库管理 | ✅ 已修复 | 核心必读 |
 | #260 | 新架构请求失败 "apikey is empty" | request_headers 缺少 Authorization header | ✅ 已修复 | 核心必读 |
+| #261 | gpt-image-2 返回结果为空 | 配置webhook+修改空结果检测逻辑 | ✅ 已修复 | 核心必读 |
 
 ---
 
@@ -3164,6 +3165,58 @@ if (existingMd5s.includes(result.md5)) {
 
 ### 状态
 ✅ 已修复
+
+---
+
+### #261 - gpt-image-2 返回结果为空（CRITICAL）
+
+**问题描述**：
+- 使用 gpt-image-2 模型生图时，终端实际已出图，但前端显示"返回结果为空"
+- 终端返回格式：`{"code":0,"data":{"id":"xxx"},"msg":"success"}`
+- 最终结果格式：`{"id":"xxx","results":[{"url":"..."}],"status":"succeeded"}`
+
+**根因分析**：
+1. `/v1/draw/completions` 端点只返回任务 ID，不返回 SSE 流
+2. 服务器需要通过 webhook 推送最终结果
+3. 请求配置中 `webHook: "-1"` 禁用了 webhook
+4. 代码检测到 `result.sseResult` 为空时，立即标记为失败
+
+**修复方案**：
+1. **配置 webhook URL**：更新 `api_configs` 表 id=7 的 `request_body_template.webHook` 字段
+   ```
+   webHook: https://{domain}/api/webhook/draw-callback
+   ```
+
+2. **修改空结果检测逻辑**：当 `result.sseResult` 为空但有 `terminalTaskId` 时，不标记为失败
+   ```typescript
+   if (result.sseResult && result.sseResult.imageUrls.length > 0) {
+     // 有图片，处理成功
+   } else if (result.terminalTaskId) {
+     // 有 terminalTaskId 但没有 sseResult，说明任务已提交
+     // 等待 webhook 回调更新缓存，前端轮询会检测到更新
+     console.log(`[SSE] 任务已提交: ${result.terminalTaskId}，等待 webhook 回调`);
+     submittedCount++;
+   } else {
+     // 真正的失败
+     errors.push({ index, error: '终端返回空结果' });
+   }
+   ```
+
+**流程验证**：
+1. `start` 事件 → 任务开始
+2. `submitted` 事件 → 任务 ID 提交
+3. `waiting` 事件 → 等待 webhook 回调
+4. Webhook 收到回调（`status: succeeded` + `results`）→ 更新缓存
+5. 前端轮询检测到更新 → 发送 `image` 事件
+6. `complete` 事件 → 任务完成
+
+**修改文件**：
+- `src/app/api/image-to-image/route.ts`
+  - 第 972-985 行：添加 `terminalTaskId` 检测分支
+- 数据库 `api_configs` 表 id=7
+  - `request_body_template.webHook` 字段
+
+**状态**：✅ 已修复
 
 ---
 

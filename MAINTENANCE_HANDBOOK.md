@@ -26,6 +26,14 @@
 | **生产数据库** | `hrwoalchynrnwlcqdpxn.supabase.co` | 线上服务 | ✅ 正在使用 |
 | **沙盒数据库** | `br-jolly-chub-94e68322...` | 已废弃 | ❌ **禁止使用** |
 
+### GitHub 仓库配置（必须背诵）
+
+| 项目 | 值 |
+|------|-----|
+| **仓库地址** | `https://github.com/695043662-eng/kiikii-ai-web.git` |
+| **用户名** | `695043662-eng` |
+| **Token** | 见本地 `.env.local` 或 GitHub Settings → Tokens |
+
 ### SERVICE_ROLE_KEY（必须背诵）
 
 | 环境 | Key |

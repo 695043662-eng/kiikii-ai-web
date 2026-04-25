@@ -3286,6 +3286,70 @@ if (existingMd5s.includes(result.md5)) {
 
 ---
 
+## #297 数据库配置被错误覆盖 - 全量恢复（CRITICAL）⚠️ 必读
+
+**发现日期**：2026-04-25
+**修复日期**：2026-04-25
+
+### 问题描述
+- AI 在尝试修复 GPT Image 2 无法使用的问题时，多次错误修改 `api_configs` 和 `api_models` 表
+- 把模型名搞错（创建了 `nano-banana-2-ch1` 等不存在的模型名）
+- 把所有模型的 `config_id` 都改成 5，导致全部指向错误的 API 端点
+- 用 `seed-api-configs.sql`（初始模板文件）覆盖了真实数据，积分全部改错
+- 开发环境和生产环境的数据库配置全部被破坏
+
+### 根因分析
+**AI 的灾难性操作链**：
+1. 看到某个模型的 `config_id` 错误 → 直接修改数据库 → 改错了
+2. 发现改错 → 再改 → 又改错 → 循环往复
+3. 用模板文件覆盖 → 彻底破坏真实配置
+4. **关键错误**：没有先查询正确数据再修改，而是凭猜测操作
+
+### ⛔⛔⛔ 数据库修改铁律（新增）⛔⛔⛔
+
+1. **禁止用模板文件覆盖真实数据库** - seed 文件只是初始模板，不含真实配置
+2. **修改前必须先查询** - 先 `SELECT` 确认当前数据，再决定如何修改
+3. **只改用户指定的内容** - 用户说改 gpt-image-2，就只改 gpt-image-2，不要碰其他模型
+4. **禁止批量修改** - 不要一条 UPDATE 影响所有行
+5. **恢复数据必须从可靠来源获取** - 本次从沙盒数据库（develop 环境）获取了正确数据
+
+### 正确数据（已恢复）
+
+**api_configs（5条）**：
+| id | name | api_endpoint | service_type |
+|----|------|-------------|-------------|
+| 1 | GRS AI (Dakka) | https://grsai.dakka.com.cn/v1/draw/nano-banana | image_generation |
+| 2 | Google Gemini | https://generativelanguage.googleapis.com | image_generation |
+| 3 | 智能分割 - GRS AI | https://grsai.dakka.com.cn/v1/chat/completions | smart_split |
+| 4 | 图片生成 - Gemini | https://api.glmbigmodel.me | image_generation |
+| 6 | 视频生成 - GRS AI | https://grsai.dakka.com.cn/v1/video/generate | video_generation |
+
+**api_models（14条）**：
+| model_id | model_name | config_id | credits_base | is_active |
+|----------|-----------|-----------|-------------|-----------|
+| nano-banana-fast | Nano Banana Fast | 1 | 6 | true |
+| nano-banana | Nano Banana | 1 | 20 | true |
+| nano-banana-2 | Nano Banana 2 通道一 | 1 | 15 | true |
+| nano-banana-2-cl | Nano Banana 2 通道二 | 1 | 17 | true |
+| nano-banana-2-4k-cl | Nano Banana 2 通道三 4K | 1 | 21 | true |
+| nano-banana-pro | Nano Banana Pro 通道一 | 1 | 23 | true |
+| nano-banana-pro-vt | Nano Banana Pro 通道二 | 1 | 25 | true |
+| nano-banana-pro-cl | Nano Banana Pro 通道三 | 1 | 43 | true |
+| nano-banana-pro-vip | Nano Banana Pro VIP | 1 | 88 | true |
+| nano-banana-pro-4k-vip | Nano Banana Pro VIP 4K | 1 | 120 | true |
+| gemini-3-Flash-image-preview | Gemini 3 Flash Image | 4 | 6 | false |
+| smart_split | 智能分割 | 3 | 5 | true |
+| grs-sora-2 | Sora 2 方法 | 6 | 23 | false |
+| gpt-image-2 | GPT Image 2 | 1 | 30 | true |
+
+### 修复方法
+通过 Node.js 脚本使用 Supabase 客户端直接连接开发和生产数据库，全量删除后重新插入正确数据。
+
+### 状态
+✅ 已修复（开发环境 + 生产环境 + 沙盒数据库均已恢复）
+
+---
+
 ## #282 积分返还逻辑分散导致漏返（CRITICAL）⚠️ 必读
 
 **问题描述**：

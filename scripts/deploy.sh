@@ -18,9 +18,11 @@ pnpm install --frozen-lockfile
 echo "🔨 构建项目（这需要几分钟，网站仍可访问）..."
 pnpm run build
 
-# 🔧 #294 修复：standalone 模式需要手动复制 public 目录
+# 🔧 #294 修复：standalone 模式需要手动复制静态资源
 echo "📁 复制静态资源..."
 cp -r public .next/standalone/public
+mkdir -p .next/standalone/.next
+cp -r .next/static .next/standalone/.next/static
 
 # 3. 房子盖好了，开始"闪电换房"
 echo "⚡ 闪电切换服务..."

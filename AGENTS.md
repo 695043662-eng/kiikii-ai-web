@@ -928,7 +928,7 @@ pnpm run ts-check   # 类型检查（tsc --noEmit）
 **在服务器执行以下命令，一键完成部署：**
 
 ```bash
-cd /www/wwwroot/kiikii-ai-web && git fetch origin && git reset --hard origin/main && npm run build && pm2 delete all && pm2 start ecosystem.config.js --env production && pm2 save
+cd /www/wwwroot/kiikii-ai-web && git fetch origin && git reset --hard origin/main && npm run build && cp -r public .next/standalone/public && mkdir -p .next/standalone/.next && cp -r .next/static .next/standalone/.next/static && pm2 delete all && pm2 start ecosystem.config.js --env production && pm2 save
 ```
 
 **命令解释**：
@@ -937,11 +937,16 @@ cd /www/wwwroot/kiikii-ai-web && git fetch origin && git reset --hard origin/mai
 | 1 | `git fetch origin` | 获取远程最新代码 |
 | 2 | `git reset --hard origin/main` | 强制重置到远程 main 分支（丢弃本地修改） |
 | 3 | `npm run build` | 构建生产版本 |
-| 4 | `pm2 delete all` | 删除所有 PM2 进程 |
-| 5 | `pm2 start ecosystem.config.js --env production` | 以生产环境启动服务 |
-| 6 | `pm2 save` | 保存 PM2 进程列表（重启后自动恢复） |
+| 4 | `cp -r public .next/standalone/public` | 复制 public 目录（standalone 模式必需） |
+| 5 | `mkdir -p .next/standalone/.next` | 创建 .next 目录 |
+| 6 | `cp -r .next/static .next/standalone/.next/static` | 复制静态资源（standalone 模式必需） |
+| 7 | `pm2 delete all` | 删除所有 PM2 进程 |
+| 8 | `pm2 start ecosystem.config.js --env production` | 以生产环境启动服务 |
+| 9 | `pm2 save` | 保存 PM2 进程列表（重启后自动恢复） |
 
 **⚠️ 注意**：`git reset --hard` 会丢弃服务器上所有未提交的修改！
+
+**⚠️ 重要**：standalone 模式必须复制 `public` 和 `.next/static`，否则 UI 界面无法显示！
 
 ## ⛔⛔⛔ 部署前必检铁律（CRITICAL）⛔⛔⛔
 

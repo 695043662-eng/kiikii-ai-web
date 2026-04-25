@@ -33,6 +33,41 @@
 | **开发** | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im96ZGx2eHhvdWZraWF6ZGR2eHlzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjYwMTk1MCwiZXhwIjoyMDkyMTc3OTUwfQ.IkglsGE7zNOxAtBHgS9bnGj9oapDz3UXLlpClXwIOwk` |
 | **生产** | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhyd29hbGNoeW5ybndsY3FkcHhuIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjA4ODA5NywiZXhwIjoyMDkxNjY0MDk3fQ.Hss10LcIsaL-DCRU5OjnY40qgbCZmQ9abOpavEfr2d0` |
 
+### 数据库表同步规范（CRITICAL）
+
+**同步方向：开发环境 → 生产环境（严禁反向！）**
+
+#### 一、配置表（需要同步数据）
+
+| 表名 | 中文名 | 功能说明 |
+|------|--------|----------|
+| `api_models` | AI模型配置表 | 存储所有AI生图模型的配置（名称、积分消耗、端点等） |
+| `api_configs` | API服务配置表 | 存储第三方API服务的认证信息（API Key、端点等） |
+| `recharge_packages` | 充值套餐表 | 存储用户可购买的积分套餐配置 |
+| `canvas_config` | 画布配置表 | 存储画布编辑器的全局配置参数 |
+| `model_credits_config` | 模型积分自定义配置表 | 覆盖默认模型积分的自定义配置 |
+
+#### 二、用户业务数据表（必须隔离）
+
+| 表名 | 中文名 | 功能说明 |
+|------|--------|----------|
+| `users` | 用户表 | 存储注册用户的基本信息和积分余额 |
+| `generation_records` | 生成记录表 | 存储AI生图任务的详细记录 |
+| `credit_logs` | 积分流水表 | 存储所有积分变动记录 |
+| `recharge_records` | 充值记录表 | 存储用户充值订单的详细信息 |
+| `prompt_favorites` | 提示词收藏表 | 存储用户收藏的常用提示词 |
+| `redeem_keys` | 激活码表 | 存储可兑换积分的激活码 |
+| `redeem_usage` | 激活码使用记录表 | 记录激活码的每次使用情况 |
+
+#### 三、运行时状态表（自然隔离）
+
+| 表名 | 中文名 | 功能说明 |
+|------|--------|----------|
+| `ip_rate_limits` | IP频率限制表 | 记录IP请求次数，防刷接口，自动过期清理 |
+| `api_tasks` | API任务幂等性表 | 记录API请求状态，防重复提交 |
+| `sms_codes` | 短信验证码表 | 存储发送的验证码，过期自动清理 |
+| `api_keys` | API密钥表 | 存储用户的API访问密钥 |
+
 ### 禁令
 
 | 禁止项 | 说明 |
@@ -194,6 +229,7 @@ exec_sql({ sql: "SELECT * FROM users" })
 | #292 | 用户详情对话框优化 | 变宽无横拉条+变动前余额+来源区分 | ✅ 已修复 | |
 | #293 | 数据库环境配置缺失 | 军规添加生产环境 SERVICE_ROLE_KEY | ✅ 已修复 | |
 | #294 | 数据库字段不同步 | 开发/生产环境字段对比并同步 | ✅ 已修复 | |
+| #295 | 配置表同步方向错误 | 必须以开发环境为准同步到生产 | ✅ 已修复 | |
 
 ---
 

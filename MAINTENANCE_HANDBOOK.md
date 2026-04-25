@@ -26,6 +26,13 @@
 | **生产数据库** | `hrwoalchynrnwlcqdpxn.supabase.co` | 线上服务 | ✅ 正在使用 |
 | **沙盒数据库** | `br-jolly-chub-94e68322...` | 已废弃 | ❌ **禁止使用** |
 
+### SERVICE_ROLE_KEY（必须背诵）
+
+| 环境 | Key |
+|------|-----|
+| **开发** | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im96ZGx2eHhvdWZraWF6ZGR2eHlzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjYwMTk1MCwiZXhwIjoyMDkyMTc3OTUwfQ.IkglsGE7zNOxAtBHgS9bnGj9oapDz3UXLlpClXwIOwk` |
+| **生产** | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhyd29hbGNoeW5ybndsY3FkcHhuIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjA4ODA5NywiZXhwIjoyMDkxNjY0MDk3fQ.Hss10LcIsaL-DCRU5OjnY40qgbCZmQ9abOpavEfr2d0` |
+
 ### 禁令
 
 | 禁止项 | 说明 |
@@ -185,6 +192,7 @@ exec_sql({ sql: "SELECT * FROM users" })
 | #290 | 占位符像素密度低 | placeholderBaseSize /4 → /2 | ✅ 已修复 | |
 | #291 | 管理后台积分流水入口+减少变增加 | 删除独立Tab+修复distributeCredits逻辑 | ✅ 已修复 | |
 | #292 | 用户详情对话框优化 | 变宽无横拉条+变动前余额+来源区分 | ✅ 已修复 | |
+| #293 | 数据库环境配置缺失 | 军规添加生产环境 SERVICE_ROLE_KEY | ✅ 已修复 | |
 
 ---
 

@@ -72,7 +72,7 @@ module.exports = {
       // 进程管理
       watch: false,                    // 生产环境不监听文件变化
       ignore_watch: ['node_modules', 'logs'],
-      max_memory_restart: '1.5G',      // 内存超过 1.5G 自动重启（2G 服务器留余量）
+      max_memory_restart: '1500M',     // 内存超过 1.5G(1500M) 自动重启（2G 服务器留余量）
       min_uptime: '10s',               // 最小运行时间，低于此视为启动失败
       max_restarts: 10,                // 最大重启次数
       restart_delay: 1000,             // 重启延迟 1 秒

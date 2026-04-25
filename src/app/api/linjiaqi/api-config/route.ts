@@ -17,11 +17,10 @@ export async function GET(request: NextRequest) {
       throw configsError;
     }
     
-    // 获取所有模型
+    // 获取所有模型（只按 sort_order 排序，支持管理后台拖拽调整顺序）
     const { data: models, error: modelsError } = await supabase
       .from('api_models')
       .select('*')
-      .order('config_id')
       .order('sort_order');
     
     if (modelsError) {

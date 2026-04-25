@@ -234,11 +234,15 @@ export function buildRequest(
   headers: Record<string, string>;
   body: Record<string, any>;
 } {
+  // 🔧 #296 修复：使用 terminalModel 映射终端 API 支持的模型名
+  // 如果 parameters 中有 terminalModel，优先使用它作为发送给终端的模型名
+  const terminalModel = config.parameters?.terminalModel || config.modelId;
+  
   // 添加 apiKey 到变量
   const allVariables = {
     ...variables,
     apiKey: config.apiKey,
-    model: config.modelId,
+    model: terminalModel,  // 使用映射后的模型名
   };
 
   // 深度替换请求头中的变量

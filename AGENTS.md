@@ -923,6 +923,26 @@ pnpm run start      # 生产模式
 pnpm run ts-check   # 类型检查（tsc --noEmit）
 ```
 
+## ⛔⛔⛔ 生产环境一键黄金部署（CRITICAL）⛔⛔⛔
+
+**在服务器执行以下命令，一键完成部署：**
+
+```bash
+cd /www/wwwroot/kiikii-ai-web && git fetch origin && git reset --hard origin/main && npm run build && pm2 delete all && pm2 start ecosystem.config.js --env production && pm2 save
+```
+
+**命令解释**：
+| 步骤 | 命令 | 说明 |
+|------|------|------|
+| 1 | `git fetch origin` | 获取远程最新代码 |
+| 2 | `git reset --hard origin/main` | 强制重置到远程 main 分支（丢弃本地修改） |
+| 3 | `npm run build` | 构建生产版本 |
+| 4 | `pm2 delete all` | 删除所有 PM2 进程 |
+| 5 | `pm2 start ecosystem.config.js --env production` | 以生产环境启动服务 |
+| 6 | `pm2 save` | 保存 PM2 进程列表（重启后自动恢复） |
+
+**⚠️ 注意**：`git reset --hard` 会丢弃服务器上所有未提交的修改！
+
 ## ⛔⛔⛔ 部署前必检铁律（CRITICAL）⛔⛔⛔
 
 **原因**：开发模式（`next dev`）跳过类型检查，所以本地跑得好好的，推到生产构建就炸。

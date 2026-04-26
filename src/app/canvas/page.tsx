@@ -7994,7 +7994,7 @@ function CanvasContent({
           
           return (
             <div key={`selection-${id}`}>
-              {/* 选中边框 */}
+              {/* 选中边框 + 四角触发区域 */}
               <div
                 style={{
                   position: 'absolute',
@@ -8003,78 +8003,72 @@ function CanvasContent({
                   width: screenW,
                   height: screenH,
                   border: isGroup ? '2px dashed #8b5cf6' : '2px solid #40A9FF',
-                  borderRadius: 8,  // #299 优化：添加四角圆角
+                  borderRadius: 8,
                   pointerEvents: 'none',
                   zIndex: 20
                 }}
-              />
-              
-              {/* #299 优化：移除四角圆点，改用透明悬停区域显示鼠标样式 */}
-              {!isGroup && ['top-left', 'top-right', 'bottom-left', 'bottom-right'].map((corner) => {
-                const handleX = corner.includes('left') ? screenX - 10 : corner.includes('right') ? screenX + screenW - 10 : 0;
-                const handleY = corner.includes('top') ? screenY - 10 : corner.includes('bottom') ? screenY + screenH - 10 : 0;
-                
-                // 形状工具栏锁定宽高比优先
-                let lockAspectRatio: number | undefined;
-                if (aspectRatioLocked) {
-                  // 优先使用 aspectRatioRef，如果为 null 则使用当前元素的宽高比
-                  if (aspectRatioRef.current !== null) {
-                    // aspectRatioRef 存储的是 height/width，需要转换为 width/height
-                    lockAspectRatio = 1 / aspectRatioRef.current;
-                  } else {
-                    // 使用当前元素的宽高比
+              >
+                {/* 四角触发区域 - 放在边框内部 */}
+                {!isGroup && ['top-left', 'top-right', 'bottom-left', 'bottom-right'].map((corner) => {
+                  // 形状工具栏锁定宽高比优先
+                  let lockAspectRatio: number | undefined;
+                  if (aspectRatioLocked) {
+                    if (aspectRatioRef.current !== null) {
+                      lockAspectRatio = 1 / aspectRatioRef.current;
+                    } else {
+                      lockAspectRatio = el.width / el.height;
+                    }
+                  } else if (el.isCropped) {
                     lockAspectRatio = el.width / el.height;
+                  } else {
+                    lockAspectRatio = el.aspectRatio;
                   }
-                } else if (el.isCropped) {
-                  lockAspectRatio = el.width / el.height;
-                } else {
-                  lockAspectRatio = el.aspectRatio;
-                }
-                
-                return (
-                  <div
-                    key={corner}
-                    onMouseDown={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                      
-                      // 对于文字元素，使用存储的尺寸
-                      let startW = el.width || 50;
-                      let startH = el.height || (el.fontSize || 24) * 1.4 + 8;
-                      let startFontSize: number | undefined;
-                      if (el.type === 'text') {
-                        startFontSize = el.fontSize || 24;  // 保存原始字号
-                        // 使用存储的尺寸
-                        startW = el.width || 50;
-                        startH = el.height || startFontSize * 1.4 + 8;
-                      }
-                      
-                      setResizing({ 
-                        id: el.id, 
-                        corner, 
-                        startX: e.clientX, 
-                        startY: e.clientY, 
-                        startW: startW, 
-                        startH: startH, 
-                        startElX: el.x, 
-                        startElY: el.y,
-                        aspectRatio: el.type === 'text' ? 1 : lockAspectRatio, // 文字元素强制等比例
-                        startFontSize: startFontSize
-                      });
-                    }}
-                    style={{
-                      position: 'absolute',
-                      left: handleX,
-                      top: handleY,
-                      width: 20,  // 透明触发区域大小
-                      height: 20,
-                      cursor: corner.includes('left') && corner.includes('top') || corner.includes('right') && corner.includes('bottom') ? 'nwse-resize' : 'nesw-resize',
-                      pointerEvents: 'auto',  // #299 修复：允许鼠标事件
-                      zIndex: 21
-                    }}
-                  />
-                );
-              })}
+                  
+                  return (
+                    <div
+                      key={corner}
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        
+                        let startW = el.width || 50;
+                        let startH = el.height || (el.fontSize || 24) * 1.4 + 8;
+                        let startFontSize: number | undefined;
+                        if (el.type === 'text') {
+                          startFontSize = el.fontSize || 24;
+                          startW = el.width || 50;
+                          startH = el.height || startFontSize * 1.4 + 8;
+                        }
+                        
+                        setResizing({ 
+                          id: el.id, 
+                          corner, 
+                          startX: e.clientX, 
+                          startY: e.clientY, 
+                          startW: startW, 
+                          startH: startH, 
+                          startElX: el.x, 
+                          startElY: el.y,
+                          aspectRatio: el.type === 'text' ? 1 : lockAspectRatio,
+                          startFontSize: startFontSize
+                        });
+                      }}
+                      style={{
+                        position: 'absolute',
+                        left: corner.includes('left') ? -10 : 'auto',
+                        right: corner.includes('right') ? -10 : 'auto',
+                        top: corner.includes('top') ? -10 : 'auto',
+                        bottom: corner.includes('bottom') ? -10 : 'auto',
+                        width: 20,
+                        height: 20,
+                        cursor: corner.includes('left') && corner.includes('top') || corner.includes('right') && corner.includes('bottom') ? 'nwse-resize' : 'nesw-resize',
+                        pointerEvents: 'auto',
+                        zIndex: 21
+                      }}
+                    />
+                  );
+                })}
+              </div>
             </div>
           );
         })}

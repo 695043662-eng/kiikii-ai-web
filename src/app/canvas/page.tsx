@@ -8065,10 +8065,9 @@ function CanvasContent({
                       top: handleTop,
                       width: 20,
                       height: 20,
-                      backgroundColor: 'red',  // 临时调试
                       cursor: corner.includes('left') && corner.includes('top') || corner.includes('right') && corner.includes('bottom') ? 'nwse-resize' : 'nesw-resize',
-                      pointerEvents: 'auto',  // 关键：允许鼠标事件
-                      zIndex: 9999  // 测试：提高到最高层级
+                      pointerEvents: 'auto',
+                      zIndex: 30
                     }}
                   />
                 );

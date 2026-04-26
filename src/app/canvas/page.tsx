@@ -8082,7 +8082,7 @@ function CanvasContent({
         })}
         
         {/* #299 新增：选中框整体缩放 - 多选时显示大框架，单选时由元素边框处理 */}
-        {isMounted && selectionBox && canvas.state.selectedIds.length > 1 && !isCropping && !isSelectionResizing && (
+        {isMounted && selectionBox && canvas.state.selectedIds.length > 1 && !isCropping && (
           <div
             style={{
               position: 'absolute',

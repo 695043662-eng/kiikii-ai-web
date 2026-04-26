@@ -7988,6 +7988,10 @@ function CanvasContent({
           const screenW = el.width * zoom;
           const screenH = el.height * zoom;
           
+          // 根据缩放比例动态调整边框宽度和圆角
+          const scaledBorderWidth = Math.max(1, Math.round(2 * zoom));
+          const scaledBorderRadius = Math.max(0, Math.round(12 * zoom));
+          
           // 组元素显示特殊样式
           const isGroup = el.type === 'group' && el.groupChildIds && el.groupChildIds.length > 0;
           
@@ -8001,8 +8005,8 @@ function CanvasContent({
                   top: screenY,
                   width: screenW,
                   height: screenH,
-                  border: isGroup ? '2px dashed #8b5cf6' : '2px solid #888',
-                  borderRadius: isGroup ? 8 : 12,
+                  border: isGroup ? `${scaledBorderWidth}px dashed #8b5cf6` : `${scaledBorderWidth}px solid #888`,
+                  borderRadius: isGroup ? Math.max(0, Math.round(8 * zoom)) : scaledBorderRadius,
                   pointerEvents: 'none',
                   zIndex: 20
                 }}

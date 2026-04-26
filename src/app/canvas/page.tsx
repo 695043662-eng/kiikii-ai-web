@@ -4660,6 +4660,10 @@ function CanvasContent({
       const otherElements = canvas.state.elements.filter(e => e.id !== resizing.id && e.visible);
       
       console.log('[缩放磁吸] corner:', resizing.corner, 'zoom:', zoom.toFixed(2), '阈值:', SNAP_THRESHOLD.toFixed(2), '其他元素:', otherElements.length);
+      console.log('[缩放磁吸] 当前元素边界:', { left: newX, right: newX + newW, top: newY, bottom: newY + newH });
+      otherElements.forEach((e, i) => {
+        console.log(`[缩放磁吸] 其他元素${i}:`, { id: e.id.slice(0,8), left: e.x, right: e.x + e.width, top: e.y, bottom: e.y + e.height });
+      });
       
       const elRight = newX + newW;
       const elBottom = newY + newH;

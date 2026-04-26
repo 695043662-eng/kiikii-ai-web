@@ -606,7 +606,7 @@ function getErrorMessage(data: any): string {
   if (data.failure_reason) {
     switch (data.failure_reason) {
       case 'output_moderation':
-        return '内容违规，积分返回';
+        return '内容违规';
       case 'input_moderation':
         return '输入内容违规';
       case 'error':

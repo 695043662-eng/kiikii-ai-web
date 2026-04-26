@@ -4659,6 +4659,8 @@ function CanvasContent({
       
       const otherElements = canvas.state.elements.filter(e => e.id !== resizing.id && e.visible);
       
+      console.log('[缩放磁吸] corner:', resizing.corner, 'zoom:', zoom.toFixed(2), '阈值:', SNAP_THRESHOLD.toFixed(2), '其他元素:', otherElements.length);
+      
       const elRight = newX + newW;
       const elBottom = newY + newH;
       const elCenterX = newX + newW / 2;
@@ -4783,6 +4785,7 @@ function CanvasContent({
       
       // 应用磁吸
       if (snapX !== null) {
+        console.log('[缩放磁吸] 应用X磁吸:', snapX, 'corner:', resizing.corner);
         if (resizing.corner.includes('left')) {
           // 左边对齐，snapX是新的x坐标
           const oldRight = newX + newW;
@@ -4794,6 +4797,7 @@ function CanvasContent({
         }
       }
       if (snapY !== null) {
+        console.log('[缩放磁吸] 应用Y磁吸:', snapY, 'corner:', resizing.corner);
         if (resizing.corner.includes('top')) {
           // 顶边对齐，snapY是新的y坐标
           const oldBottom = newY + newH;

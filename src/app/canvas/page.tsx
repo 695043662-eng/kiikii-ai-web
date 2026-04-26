@@ -7994,7 +7994,7 @@ function CanvasContent({
           
           return (
             <div key={`selection-${id}`}>
-              {/* 选中边框 + 四角触发区域 */}
+              {/* 选中边框 */}
               <div
                 style={{
                   position: 'absolute',
@@ -8007,68 +8007,70 @@ function CanvasContent({
                   pointerEvents: 'none',
                   zIndex: 20
                 }}
-              >
-                {/* 四角触发区域 - 放在边框内部 */}
-                {!isGroup && ['top-left', 'top-right', 'bottom-left', 'bottom-right'].map((corner) => {
-                  // 形状工具栏锁定宽高比优先
-                  let lockAspectRatio: number | undefined;
-                  if (aspectRatioLocked) {
-                    if (aspectRatioRef.current !== null) {
-                      lockAspectRatio = 1 / aspectRatioRef.current;
-                    } else {
-                      lockAspectRatio = el.width / el.height;
-                    }
-                  } else if (el.isCropped) {
-                    lockAspectRatio = el.width / el.height;
+              />
+              
+              {/* 四角触发区域 - 独立渲染，不受父元素 pointerEvents 影响 */}
+              {!isGroup && ['top-left', 'top-right', 'bottom-left', 'bottom-right'].map((corner) => {
+                // 计算触发区域的绝对位置
+                const handleLeft = corner.includes('left') ? screenX - 10 : corner.includes('right') ? screenX + screenW - 10 : 0;
+                const handleTop = corner.includes('top') ? screenY - 10 : corner.includes('bottom') ? screenY + screenH - 10 : 0;
+                
+                // 形状工具栏锁定宽高比优先
+                let lockAspectRatio: number | undefined;
+                if (aspectRatioLocked) {
+                  if (aspectRatioRef.current !== null) {
+                    lockAspectRatio = 1 / aspectRatioRef.current;
                   } else {
-                    lockAspectRatio = el.aspectRatio;
+                    lockAspectRatio = el.width / el.height;
                   }
-                  
-                  return (
-                    <div
-                      key={corner}
-                      onMouseDown={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                        
-                        let startW = el.width || 50;
-                        let startH = el.height || (el.fontSize || 24) * 1.4 + 8;
-                        let startFontSize: number | undefined;
-                        if (el.type === 'text') {
-                          startFontSize = el.fontSize || 24;
-                          startW = el.width || 50;
-                          startH = el.height || startFontSize * 1.4 + 8;
-                        }
-                        
-                        setResizing({ 
-                          id: el.id, 
-                          corner, 
-                          startX: e.clientX, 
-                          startY: e.clientY, 
-                          startW: startW, 
-                          startH: startH, 
-                          startElX: el.x, 
-                          startElY: el.y,
-                          aspectRatio: el.type === 'text' ? 1 : lockAspectRatio,
-                          startFontSize: startFontSize
-                        });
-                      }}
-                      style={{
-                        position: 'absolute',
-                        left: corner.includes('left') ? -10 : 'auto',
-                        right: corner.includes('right') ? -10 : 'auto',
-                        top: corner.includes('top') ? -10 : 'auto',
-                        bottom: corner.includes('bottom') ? -10 : 'auto',
-                        width: 20,
-                        height: 20,
-                        cursor: corner.includes('left') && corner.includes('top') || corner.includes('right') && corner.includes('bottom') ? 'nwse-resize' : 'nesw-resize',
-                        pointerEvents: 'auto',
-                        zIndex: 21
-                      }}
-                    />
-                  );
-                })}
-              </div>
+                } else if (el.isCropped) {
+                  lockAspectRatio = el.width / el.height;
+                } else {
+                  lockAspectRatio = el.aspectRatio;
+                }
+                
+                return (
+                  <div
+                    key={corner}
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      
+                      let startW = el.width || 50;
+                      let startH = el.height || (el.fontSize || 24) * 1.4 + 8;
+                      let startFontSize: number | undefined;
+                      if (el.type === 'text') {
+                        startFontSize = el.fontSize || 24;
+                        startW = el.width || 50;
+                        startH = el.height || startFontSize * 1.4 + 8;
+                      }
+                      
+                      setResizing({ 
+                        id: el.id, 
+                        corner, 
+                        startX: e.clientX, 
+                        startY: e.clientY, 
+                        startW: startW, 
+                        startH: startH, 
+                        startElX: el.x, 
+                        startElY: el.y,
+                        aspectRatio: el.type === 'text' ? 1 : lockAspectRatio,
+                        startFontSize: startFontSize
+                      });
+                    }}
+                    style={{
+                      position: 'absolute',
+                      left: handleLeft,
+                      top: handleTop,
+                      width: 20,
+                      height: 20,
+                      backgroundColor: 'red',  // 临时调试
+                      cursor: corner.includes('left') && corner.includes('top') || corner.includes('right') && corner.includes('bottom') ? 'nwse-resize' : 'nesw-resize',
+                      zIndex: 30  // 提高到更高的层级
+                    }}
+                  />
+                );
+              })}
             </div>
           );
         })}

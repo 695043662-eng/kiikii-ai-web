@@ -241,6 +241,7 @@ exec_sql({ sql: "SELECT * FROM users" })
 | #296 | 生产环境PM2未加载环境变量 | ecosystem.config.js动态读取.env.production | ✅ 已修复 | 核心必读 |
 | #297 | 数据库配置被错误覆盖 | 全量恢复api_configs和api_models，新增gpt-image-2 | ✅ 已修复 | 核心必读 |
 | #298 | 聊天容器参考图缩略图显示坏图 | handleSend等待上传完成再捕获chatImageKeys | ✅ 已修复 | 核心必读 |
+| #299 | 选中框整体缩放功能 | updateElementsBatch批量更新+等比例缩放+画布坐标转换 | ✅ 已修复 | 画布核心 |
 
 ---
 
@@ -5531,6 +5532,63 @@ const capturedRefImages = {
 2. 立即点击发送
 3. 刷新页面
 4. 确认聊天容器中参考图缩略图正常显示
+
+---
+
+### #299 - 选中框整体缩放功能（CRITICAL）
+
+**需求描述**：
+- 画布选中多个元素时，显示一个大框架
+- 拖动角落控制点可以整体缩放所有选中元素
+
+**技术要点**：
+
+#### 1. 批量更新优化（性能核心）
+```typescript
+// ❌ 错误：循环调用 updateElement 导致性能爆炸
+startElements.forEach(el => {
+  canvas.updateElement(el.id, { ... }); // 每秒 60*5=300 次 React 重渲染
+});
+
+// ✅ 正确：使用 updateElementsBatch 批量更新
+const updates = startElements.map(el => ({
+  id: el.id,
+  updates: { x: ..., y: ..., width: ..., height: ... }
+}));
+canvas.updateElementsBatch(updates); // 一次 React 重渲染
+```
+
+#### 2. 画布坐标系转换
+```typescript
+// ❌ 错误：直接使用屏幕坐标
+const dx = e.clientX - startX;
+
+// ✅ 正确：转换为画布坐标
+const dx = (e.clientX - startX) / zoom;
+```
+
+#### 3. 等比例缩放
+```typescript
+// ❌ 错误：X 和 Y 独立缩放，图片变形
+const scaleX = newWidth / startBox.width;
+const scaleY = newHeight / startBox.height;
+
+// ✅ 正确：等比例缩放，放大取大，缩小取小
+let finalScale = (scaleX > 1 || scaleY > 1) 
+  ? Math.max(scaleX, scaleY) 
+  : Math.min(scaleX, scaleY);
+```
+
+**修改文件**：
+- `src/contexts/CanvasContext.tsx` - 添加 UPDATE_ELEMENTS_BATCH action 和 updateElementsBatch 方法
+- `src/app/canvas/page.tsx` - 添加 selectionBox 计算、选中框渲染、handleSelectionResizeStart
+
+**验证方法**：
+1. 在画布中添加多个图片元素
+2. 选中多个元素（出现蓝色大框架）
+3. 拖动角落控制点
+4. 确认所有选中元素等比例缩放
+5. 缩放画布后再操作，确认坐标正确
 
 ---
 

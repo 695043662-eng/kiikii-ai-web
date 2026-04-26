@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
@@ -4100,6 +4100,37 @@ function CanvasContent({
   const [cropHandle, setCropHandle] = useState<string | null>(null);
   const [cropRatio, setCropRatio] = useState<'free' | '1:1' | '4:3' | '3:4' | '3:2' | '2:3' | '16:9' | '9:16' | '21:9' | '9:21'>('free'); // 裁剪比例
   
+  // #299 新增：选中框整体缩放
+  // 计算选中元素的边界框
+  const selectionBox = useMemo(() => {
+    const selectedIds = canvas.state.selectedIds;
+    if (selectedIds.length === 0) return null;
+    
+    const selectedElements = canvas.state.elements.filter(
+      el => selectedIds.includes(el.id) && el.visible !== false
+    );
+    if (selectedElements.length === 0) return null;
+    
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    
+    selectedElements.forEach(el => {
+      minX = Math.min(minX, el.x);
+      minY = Math.min(minY, el.y);
+      maxX = Math.max(maxX, el.x + el.width);
+      maxY = Math.max(maxY, el.y + el.height);
+    });
+    
+    return {
+      x: minX,
+      y: minY,
+      width: maxX - minX,
+      height: maxY - minY,
+    };
+  }, [canvas.state.selectedIds, canvas.state.elements]);
+  
+  // 选中框缩放状态
+  const [isSelectionResizing, setIsSelectionResizing] = useState(false);
+  
   // 形状工具栏
   const [shapeToolbarPanel, setShapeToolbarPanel] = useState<'fill' | 'stroke' | null>(null); // 默认不展开
   const [shapeToolbarHue, setShapeToolbarHue] = useState(200);
@@ -5700,6 +5731,103 @@ function CanvasContent({
       window.removeEventListener('mouseup', handleGlobalMouseUp);
     };
   }, [isSelecting, selectionRect, canvas]);
+
+  // #299 新增：选中框整体缩放处理
+  const handleSelectionResizeStart = useCallback((e: React.MouseEvent, corner: string) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    if (!selectionBox) return;
+    
+    setIsSelectionResizing(true);
+    
+    const startScreenX = e.clientX;
+    const startScreenY = e.clientY;
+    
+    const startBox = { ...selectionBox };
+    
+    // 获取当前画布的真实缩放倍率
+    const currentZoom = zoom;
+    
+    // 记录所有选中元素的初始状态
+    const startElements = canvas.state.elements
+      .filter(el => canvas.state.selectedIds.includes(el.id))
+      .map(el => ({
+        id: el.id,
+        x: el.x,
+        y: el.y,
+        width: el.width,
+        height: el.height,
+        // 相对于边界框的位置比例（0~1）
+        relX: (el.x - startBox.x) / startBox.width,
+        relY: (el.y - startBox.y) / startBox.height,
+        // 相对于边界框的尺寸比例
+        relW: el.width / startBox.width,
+        relH: el.height / startBox.height,
+      }));
+    
+    // 保存历史记录（用于 undo）
+    canvas.saveHistory?.();
+    
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      // 1. 使用真实缩放比例转换坐标
+      const dx = (moveEvent.clientX - startScreenX) / currentZoom;
+      const dy = (moveEvent.clientY - startScreenY) / currentZoom;
+      
+      let newWidth = startBox.width;
+      let newHeight = startBox.height;
+      let newX = startBox.x;
+      let newY = startBox.y;
+      
+      if (corner.includes('e')) newWidth = startBox.width + dx;
+      if (corner.includes('w')) { newWidth = startBox.width - dx; newX = startBox.x + dx; }
+      if (corner.includes('s')) newHeight = startBox.height + dy;
+      if (corner.includes('n')) { newHeight = startBox.height - dy; newY = startBox.y + dy; }
+      
+      if (newWidth <= 0 || newHeight <= 0) return;
+      
+      const scaleX = newWidth / startBox.width;
+      const scaleY = newHeight / startBox.height;
+      
+      // 2. 完美缩放手感：放大取大，缩小取小
+      let finalScale = (scaleX > 1 || scaleY > 1) ? Math.max(scaleX, scaleY) : Math.min(scaleX, scaleY);
+      
+      // 增加最小尺寸限制
+      const MIN_SIZE = 20;
+      if (startBox.width * finalScale < MIN_SIZE || startBox.height * finalScale < MIN_SIZE) {
+        finalScale = MIN_SIZE / Math.min(startBox.width, startBox.height);
+      }
+      
+      const finalWidth = startBox.width * finalScale;
+      const finalHeight = startBox.height * finalScale;
+      
+      if (corner.includes('w')) newX = startBox.x + startBox.width - finalWidth;
+      if (corner.includes('n')) newY = startBox.y + startBox.height - finalHeight;
+      
+      // 3. 收集所有更新，准备批量提交 (避免卡顿)
+      const updates = startElements.map(el => ({
+        id: el.id,
+        updates: {
+          x: newX + el.relX * finalWidth,
+          y: newY + el.relY * finalHeight,
+          width: el.relW * finalWidth,
+          height: el.relH * finalHeight,
+        }
+      }));
+      
+      // 批量更新（不存历史记录）
+      canvas.updateElementsBatch(updates);
+    };
+    
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      setIsSelectionResizing(false);
+    };
+    
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }, [selectionBox, zoom, canvas]);
 
   // 鼠标按下
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -7944,6 +8072,49 @@ function CanvasContent({
             </div>
           );
         })}
+        
+        {/* #299 新增：选中框整体缩放 - 仅在多选时显示 */}
+        {isMounted && selectionBox && canvas.state.selectedIds.length >= 1 && !isCropping && !isSelectionResizing && (
+          <div
+            style={{
+              position: 'absolute',
+              left: selectionBox.x * zoom + pan.x,
+              top: selectionBox.y * zoom + pan.y,
+              width: selectionBox.width * zoom,
+              height: selectionBox.height * zoom,
+              border: '2px solid #40A9FF',
+              borderRadius: 4,
+              pointerEvents: 'none',
+              zIndex: 25,
+            }}
+          >
+            {/* 四角控制点 */}
+            {['nw', 'ne', 'sw', 'se'].map(corner => {
+              const isLeft = corner.includes('w');
+              const isTop = corner.includes('n');
+              return (
+                <div
+                  key={corner}
+                  style={{
+                    position: 'absolute',
+                    left: isLeft ? -5 : 'auto',
+                    right: isLeft ? 'auto' : -5,
+                    top: isTop ? -5 : 'auto',
+                    bottom: isTop ? 'auto' : -5,
+                    width: 10,
+                    height: 10,
+                    background: '#fff',
+                    border: '2px solid #40A9FF',
+                    borderRadius: 2,
+                    cursor: `${corner}-resize`,
+                    pointerEvents: 'auto',
+                  }}
+                  onMouseDown={(e) => handleSelectionResizeStart(e, corner)}
+                />
+              );
+            })}
+          </div>
+        )}
         
         {/* 智能对齐线 - 拖动或调整大小时显示 */}
         {(isDragging || resizing) && (

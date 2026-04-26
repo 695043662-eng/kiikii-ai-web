@@ -144,7 +144,9 @@ type Action =
   | { type: 'DELETE_ANNOTATION'; payload: string }
   | { type: 'SET_ACTIVE_ANNOTATION'; payload: string | null }
   // #031 修复：添加 SET_VIEWPORT action，用于一次性设置 zoom 和 pan
-  | { type: 'SET_VIEWPORT'; payload: { zoom: number; panX: number; panY: number } };
+  | { type: 'SET_VIEWPORT'; payload: { zoom: number; panX: number; panY: number } }
+  // #299 新增：批量更新元素（用于选中框缩放，避免循环调用 updateElement 导致性能问题）
+  | { type: 'UPDATE_ELEMENTS_BATCH'; payload: Array<{ id: string; updates: Partial<CanvasElement> }> };
 
 // Reducer
 function canvasReducer(state: CanvasState, action: Action): CanvasState {
@@ -162,6 +164,17 @@ function canvasReducer(state: CanvasState, action: Action): CanvasState {
         elements: state.elements.map(el =>
           el.id === action.payload.id ? { ...el, ...action.payload.updates } : el
         ),
+      };
+
+    // #299 新增：批量更新元素（用于选中框缩放，O(N) 复杂度）
+    case 'UPDATE_ELEMENTS_BATCH':
+      const updatesMap = new Map(action.payload.map(u => [u.id, u.updates]));
+      return {
+        ...state,
+        elements: state.elements.map(el => {
+          const updates = updatesMap.get(el.id);
+          return updates ? { ...el, ...updates } : el;
+        }),
       };
 
     case 'DELETE_ELEMENTS':
@@ -338,7 +351,11 @@ export interface CanvasContextType {
   state: CanvasState;
   addElement: (element: Omit<CanvasElement, 'id'>) => string;
   updateElement: (id: string, updates: Partial<CanvasElement>) => void;
+  // #299 新增：批量更新元素（用于选中框缩放，避免循环调用 updateElement 导致性能问题）
+  updateElementsBatch: (updates: Array<{ id: string; updates: Partial<CanvasElement> }>) => void;
   deleteElement: (id: string) => void;
+  // #299 暴露 saveHistory 方法（用于选中框缩放结束后保存历史）
+  saveHistory: () => void;
   deleteSelected: () => void;
   duplicateSelected: () => void;
   selectElement: (id: string, multi?: boolean) => void;
@@ -647,6 +664,14 @@ export function CanvasProvider({ children }: { children: React.ReactNode }) {
   const updateElement = useCallback((id: string, updates: Partial<CanvasElement>) => {
     dispatch({ type: 'UPDATE_ELEMENT', payload: { id, updates } });
   }, []);
+
+  // #299 新增：批量更新元素（用于选中框缩放，避免循环调用 updateElement 导致性能问题）
+  const updateElementsBatch = useCallback(
+    (updates: Array<{ id: string; updates: Partial<CanvasElement> }>) => {
+      dispatch({ type: 'UPDATE_ELEMENTS_BATCH', payload: updates });
+    },
+    []
+  );
 
   // 删除单个元素
   // #289 修复：删除后立即保存，防止刷新后恢复
@@ -1195,6 +1220,7 @@ export function CanvasProvider({ children }: { children: React.ReactNode }) {
     state,
     addElement,
     updateElement,
+    updateElementsBatch,  // #299 新增
     deleteElement,
     deleteSelected,
     duplicateSelected,
@@ -1236,6 +1262,8 @@ export function CanvasProvider({ children }: { children: React.ReactNode }) {
     forceSaveToStorage,
     // 🔧 #221 修复：暴露 stateRef，解决 React 闭包陷阱
     stateRef,
+    // #299 暴露 saveHistory 方法
+    saveHistory,
   }), [
     state,
     addElement,
@@ -1275,6 +1303,7 @@ export function CanvasProvider({ children }: { children: React.ReactNode }) {
     isInitialized,
     isRestoring,
     forceSaveToStorage,
+    saveHistory,  // #299 暴露 saveHistory 方法
   ]);
 
   return (

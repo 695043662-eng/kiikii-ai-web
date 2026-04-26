@@ -28,6 +28,7 @@ export async function GET() {
     console.log('[user/info] 查询结果:', { 
       userId, 
       userCredits: user?.credits, 
+      failedAttempts: user?.failed_attempts,  // #301 打印违规计数
       error: error?.message 
     });
 

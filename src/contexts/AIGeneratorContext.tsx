@@ -658,7 +658,7 @@ export function AIGeneratorProvider({ children }: { children: React.ReactNode })
         
         // 错误回调
         onError: (error) => {
-          console.log('[AIGeneratorContext] #301 onError 收到错误，强制刷新用户信息获取最新违规计数');
+          console.log('[AIGeneratorContext] #301 onError 收到错误:', error.message, '强制刷新用户信息');
           // #301 强制刷新用户信息以获取最新的 failedAttempts（违规计数）
           refreshUserInfo(true);  // true = 强制刷新，跳过缓存
           // 调用外部错误回调

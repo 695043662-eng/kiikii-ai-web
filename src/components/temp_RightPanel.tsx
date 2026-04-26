@@ -214,15 +214,20 @@ const RightPanel: React.FC<RightPanelProps> = (props) => {
   
   // 第5次违规弹窗状态
   const [showViolationWarning, setShowViolationWarning] = React.useState(false);
-  const prevFailedAttemptsRef = React.useRef(failedAttempts);
+  const [lastTriggeredCount, setLastTriggeredCount] = React.useState(0);  // #301 记录上次触发的计数
   
   // 监听 failedAttempts 变化，第5次时弹出警告
+  // #301 修复：使用 lastTriggeredCount 防止重复弹窗，同时确保在恰好在第5次时触发
   React.useEffect(() => {
-    if (failedAttempts >= 5 && prevFailedAttemptsRef.current < 5) {
+    console.log('[RightPanel] #301 failedAttempts 变化:', failedAttempts, 'lastTriggeredCount:', lastTriggeredCount);
+    
+    // 恰好第5次，且之前没有触发过
+    if (failedAttempts >= 5 && lastTriggeredCount < 5) {
+      console.log('[RightPanel] #301 触发违规警告弹窗');
       setShowViolationWarning(true);
+      setLastTriggeredCount(failedAttempts);
     }
-    prevFailedAttemptsRef.current = failedAttempts;
-  }, [failedAttempts]);
+  }, [failedAttempts, lastTriggeredCount]);
   
   // 解构所有 props，确保变量名与原代码 100% 一致
   const {

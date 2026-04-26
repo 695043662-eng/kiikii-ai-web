@@ -1187,14 +1187,17 @@ export async function POST(request: NextRequest) {
               console.log(`[SSE] #228 检查完成状态: completedCount=${completedCount}, failedCount=${failedCount}, generationCount=${generationCount}, allDone=${allDone}, currentStatus=${currentResult.status}`);
               
               // #227 修复：更新状态后直接检查新状态，防止 currentResult 变量是旧值
-              if (allDone && currentResult.status !== 'completed' && currentResult.status !== 'failed') {
+              // #301 修复：即使状态已经是 failed，也要执行积分返还和违规计数
+              if (allDone && currentResult.status !== 'completed') {
                 const newStatus = completedCount > 0 ? 'completed' : 'failed';
-                // 标记任务完成
-                setTaskResult(actualTaskId, {
-                  ...currentResult,
-                  status: newStatus,
-                  completedAt: Date.now(),
-                });
+                // 标记任务完成（如果状态还没更新）
+                if (currentResult.status !== 'failed') {
+                  setTaskResult(actualTaskId, {
+                    ...currentResult,
+                    status: newStatus,
+                    completedAt: Date.now(),
+                  });
+                }
                 console.log(`[SSE] 所有图片已完成: ${completedCount} 成功, ${failedCount} 失败, status=${newStatus}`);
                 
                 // 立即检查是否需要发送 complete 事件

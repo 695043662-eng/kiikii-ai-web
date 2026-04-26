@@ -499,8 +499,11 @@ export async function POST(request: NextRequest) {
             const creditsPerImage = mappingResult.requestParams?.creditsPerImage || 0;
             const generationCount = mappingResult.requestParams?.generationCount || imageItems.length;
             
+            console.log(`[Webhook] #301 准备执行积分返还: creditsPerImage=${creditsPerImage}, generationCount=${generationCount}`);
+            
             // #283 修复：必须使用 await 等待返还完成
             try {
+              console.log(`[Webhook] #301 开始调用 handlePartialRefund...`);
               const refundResult = await handlePartialRefund(
                 getTaskResult,
                 setTaskResult,
@@ -511,6 +514,7 @@ export async function POST(request: NextRequest) {
                 mappingResult.userId,
                 `Webhook回调：部分图片失败`
               );
+              console.log(`[Webhook] #301 handlePartialRefund 返回: success=${refundResult.success}, refundAmount=${refundResult.refundAmount}`);
               if (refundResult.success) {
                 console.log(`[积分补偿] #282 Webhook退还成功，剩余 ${refundResult.newBalance} 积分`);
               }
@@ -519,9 +523,15 @@ export async function POST(request: NextRequest) {
             }
             
             // ====== 违规失败时增加失败计数 ======
+            console.log(`[Webhook] #301 准备检查违规: isViolation=${isViolation}`);
             if (isViolation && mappingResult.userId) {
-              const failedResult = await incrementFailedAttempts(mappingResult.userId);
-              console.log(`[违规计数] 用户 ${mappingResult.userId} 违规次数: ${failedResult.failedAttempts}/${failedResult.failedAttempts + failedResult.remainingAttempts}`);
+              console.log(`[Webhook] #301 开始调用 incrementFailedAttempts...`);
+              try {
+                const failedResult = await incrementFailedAttempts(mappingResult.userId);
+                console.log(`[违规计数] 用户 ${mappingResult.userId} 违规次数: ${failedResult.failedAttempts}/${failedResult.failedAttempts + failedResult.remainingAttempts}`);
+              } catch (err) {
+                console.error(`[Webhook] #301 incrementFailedAttempts 异常:`, err);
+              }
             }
           }
         }

@@ -5153,6 +5153,39 @@ WHERE reference_id IS NOT NULL;
 
 ---
 
+## #301 违规计数弹窗不触发（续）
+
+**问题**：用户违规超过5次，警告弹窗仍然没有弹出
+
+**深入分析**：
+1. **SSE 条件判断问题**：第1190行条件 `currentResult.status !== 'failed'` 导致当状态已经是 failed 时不执行违规计数
+2. **前端弹窗触发条件**：使用 `prevFailedAttemptsRef` 可能导致首次加载时不触发
+3. **缺少详细日志**：webhook 中没有足够的日志来追踪问题
+
+**修复内容**：
+1. `src/app/api/image-to-image/route.ts`:
+   - 修改条件：`currentResult.status !== 'completed'` （移除 `!== 'failed'`）
+   - 确保即使状态已经是 failed，也能执行积分返还和违规计数
+
+2. `src/app/api/webhook/draw-callback/route.ts`:
+   - 添加详细日志追踪 `handlePartialRefund` 和 `incrementFailedAttempts` 的执行
+
+3. `src/components/temp_RightPanel.tsx`:
+   - 修改弹窗触发逻辑：使用 `lastTriggeredCount` state 替代 ref
+   - 条件改为：`failedAttempts >= 5 && lastTriggeredCount < 5`
+
+**验证结果**：
+- ✅ 类型检查通过
+- ✅ 服务运行正常
+- ⏳ 待真人模拟验证
+
+---
+
+### 状态
+✅ 已修复
+
+---
+
 ## #301 违规计数弹窗不触发
 
 **问题**：用户违规超过5次，警告弹窗仍然没有弹出

@@ -874,12 +874,15 @@ export function useGenService() {
                   config.onPlaceholderFailed?.(placeholderId, data.error || '生成失败');
                 }
               } else if (data.taskId) {
+                console.log('[GenService] #301 调用 onError 回调, taskId:', data.taskId, 'error:', data.error);
                 config.onError?.({
                   type: 'global',
                   message: data.error || '生成失败',
                   taskId: data.taskId,
                   placeholderIds: Array.from(pendingPlaceholders),
                 });
+              } else {
+                console.log('[GenService] #301 error 事件缺少 taskId, data:', JSON.stringify(data));
               }
               
               // #276 修复：error 事件携带积分余额时，触发积分更新回调

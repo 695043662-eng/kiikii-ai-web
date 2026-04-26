@@ -3395,7 +3395,6 @@ function CanvasApp({ canvas, router }: { canvas: CanvasContextType; router: Retu
         referenceImageKeys: capturedRefImages.keys.length > 0 ? [...capturedRefImages.keys] : undefined,
         specs: { model: modelDisplayNames[selectedModel] || formatModelName(selectedModel), ratio: selectedRatio, resolution: selectedResolution, count: selectedCount } 
       }]);
-      setInputValue('');
 
       // 添加助手消息
       const assistantMsgId = (Date.now() + 1).toString();

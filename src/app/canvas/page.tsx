@@ -3359,6 +3359,14 @@ function CanvasApp({ canvas, router }: { canvas: CanvasContextType; router: Retu
     console.log('[Canvas handleSend] 所有验证通过，开始生成...');
 
     try {
+      // 🔧 #298 修复：等待所有参考图上传完成（避免 keys 为空）
+      const pendingUploads = Array.from(globalPendingUploads.values());
+      if (pendingUploads.length > 0) {
+        console.log('[Canvas handleSend] 等待', pendingUploads.length, '个上传完成...');
+        await Promise.all(pendingUploads);
+        console.log('[Canvas handleSend] 所有上传完成');
+      }
+      
       // 🔧 修复：在开始时就捕获参考图状态（避免 onComplete 回调时状态已变化）
       const capturedRefImages = {
         base64s: [...chatImageBase64s],

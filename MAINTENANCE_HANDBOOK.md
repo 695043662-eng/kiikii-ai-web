@@ -238,6 +238,9 @@ exec_sql({ sql: "SELECT * FROM users" })
 | #293 | 数据库环境配置缺失 | 军规添加生产环境 SERVICE_ROLE_KEY | ✅ 已修复 | |
 | #294 | 数据库字段不同步 | 开发/生产环境字段对比并同步 | ✅ 已修复 | |
 | #295 | 配置表同步方向错误 | 必须以开发环境为准同步到生产 | ✅ 已修复 | |
+| #296 | 生产环境PM2未加载环境变量 | ecosystem.config.js动态读取.env.production | ✅ 已修复 | 核心必读 |
+| #297 | 数据库配置被错误覆盖 | 全量恢复api_configs和api_models，新增gpt-image-2 | ✅ 已修复 | 核心必读 |
+| #298 | 聊天容器参考图缩略图显示坏图 | handleSend等待上传完成再捕获chatImageKeys | ✅ 已修复 | 核心必读 |
 
 ---
 
@@ -5401,6 +5404,133 @@ const deleteSelected = useCallback(() => {
 2. 删除图片
 3. 立即刷新页面
 4. 确认图片不再出现
+
+---
+
+### #296 - 生产环境PM2未加载环境变量（CRITICAL）
+
+**问题描述**：
+- 生产环境部署后签名 URL 生成失败："missing param Key"
+- PM2 启动时未读取 `.env.production` 文件
+- COS 配置（SecretId、SecretKey、Bucket、Region）为空
+
+**根因分析**：
+PM2 的 `env_production` 只能设置固定值，无法动态读取 `.env.production` 文件：
+```javascript
+// ecosystem.config.js - 错误写法
+module.exports = {
+  apps: [{
+    name: 'kiikii-prod',
+    env_production: {
+      NODE_ENV: 'production',
+      // ❌ 无法动态读取 .env.production 文件
+    }
+  }]
+};
+```
+
+**修复方案**：
+在 `ecosystem.config.js` 中动态读取 `.env.production` 文件：
+```javascript
+const fs = require('fs');
+const path = require('path');
+
+// 读取 .env.production 文件
+function loadEnvFile(filePath) {
+  const env = {};
+  if (fs.existsSync(filePath)) {
+    const content = fs.readFileSync(filePath, 'utf8');
+    content.split('\n').forEach(line => {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith('#')) {
+        const [key, ...valueParts] = trimmed.split('=');
+        if (key && valueParts.length > 0) {
+          env[key.trim()] = valueParts.join('=').trim();
+        }
+      }
+    });
+  }
+  return env;
+}
+
+const envProduction = loadEnvFile(path.join(__dirname, '.env.production'));
+
+module.exports = {
+  apps: [{
+    name: 'kiikii-prod',
+    script: '.next/standalone/server.js',
+    env_production: {
+      NODE_ENV: 'production',
+      ...envProduction,  // ✅ 动态加载所有环境变量
+    }
+  }]
+};
+```
+
+**修改文件**：
+- `/var/www/kiikii/ecosystem.config.js` - 动态读取 `.env.production`
+
+**验证方法**：
+1. `pm2 logs kiikii-prod --lines 20 | grep -iE "COS|环境配置"`
+2. 确认 COS 配置正确加载
+3. `curl -s "http://localhost:5000/api/canvas/signed-url" -X POST -H "Content-Type: application/json" -d '{"keys":["test.png"]}'`
+4. 确认返回有效签名 URL
+
+---
+
+### #298 - 聊天容器参考图缩略图显示坏图（CRITICAL）
+
+**问题描述**：
+- 历史记录恢复后，生成图正常显示
+- 但聊天容器中用户消息的参考图缩略图显示为坏图
+- `referenceImages` 为空，无法显示参考图
+
+**根因分析**：
+用户上传参考图后立即点击发送，此时上传还未完成：
+```typescript
+// handleSend 函数
+const capturedRefImages = {
+  base64s: [...chatImageBase64s],
+  urls: [...chatImageUrls],
+  keys: [...chatImageKeys],  // ❌ 此时 chatImageKeys 可能是空的！
+  md5s: [...chatImageMd5s],
+};
+```
+
+上传流程：
+1. 用户上传参考图 → 乐观 UI 立即显示预览
+2. 后台开始上传到 COS（异步）
+3. 用户点击发送 → `chatImageKeys` 还是空的
+4. `referenceImageKeys` 没有保存 → 刷新后无法恢复
+
+**修复方案**：
+在 `handleSend` 中等待所有正在进行的上传完成：
+```typescript
+// #298 修复：等待所有参考图上传完成
+const pendingUploads = Array.from(globalPendingUploads.values());
+if (pendingUploads.length > 0) {
+  console.log('[Canvas handleSend] 等待', pendingUploads.length, '个上传完成...');
+  await Promise.all(pendingUploads);
+  console.log('[Canvas handleSend] 所有上传完成');
+}
+
+// 然后再捕获参考图状态
+const capturedRefImages = {
+  base64s: [...chatImageBase64s],
+  urls: [...chatImageUrls],
+  keys: [...chatImageKeys],  // ✅ 此时 chatImageKeys 已有值
+  md5s: [...chatImageMd5s],
+};
+```
+
+**修改文件**：
+- `src/app/canvas/page.tsx` - handleSend 函数添加等待逻辑
+
+**验证方法**：
+1. 在画布对话框上传参考图
+2. 立即点击发送
+3. 刷新页面
+4. 确认聊天容器中参考图缩略图正常显示
 
 ---
 

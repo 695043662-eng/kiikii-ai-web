@@ -8098,7 +8098,6 @@ function CanvasContent({
               return (
                 <div
                   key={corner}
-                  data-resize-handle={corner}
                   style={{
                     position: 'absolute',
                     left: isLeft ? -6 : 'auto',

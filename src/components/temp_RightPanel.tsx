@@ -24,6 +24,8 @@ import React from 'react';
 import Image from 'next/image';
 import { X, Plus, Send, Loader2 } from 'lucide-react';  // #048 新增 Loader2
 import { InfoDialog } from '@/components/ui/info-dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { useAIGenerator } from '@/contexts/AIGeneratorContext';
 import { deleteReferenceImage } from '@/lib/dialog-data-db';
 
@@ -218,14 +220,23 @@ const RightPanel: React.FC<RightPanelProps> = (props) => {
   console.log('[RightPanel] #301 当前 failedAttempts:', failedAttempts);
   
   // #301 违规警告弹窗：只在 failedAttempts >= 5 时触发一次
+  // 使用 sessionStorage 持久化，避免切换页面后重复弹窗
   const hasShownWarningRef = React.useRef(false);
   
   React.useEffect(() => {
+    // 检查 sessionStorage 是否已经显示过警告（本次会话）
+    const hasShown = sessionStorage.getItem('violation_warning_shown');
+    if (hasShown === 'true') {
+      hasShownWarningRef.current = true;
+      return;
+    }
+    
     // 已弹过或未达标，跳过
     if (hasShownWarningRef.current || failedAttempts < 5) return;
     
     console.log(`[RightPanel] #301 违规检测触发弹窗，当前次数: ${failedAttempts}`);
-    hasShownWarningRef.current = true;  // 一次性锁死，防止重复弹窗
+    hasShownWarningRef.current = true;
+    sessionStorage.setItem('violation_warning_shown', 'true');  // 持久化到 sessionStorage
     setShowViolationWarning(true);
   }, [failedAttempts]);  // 只监听 failedAttempts，与弹窗状态解绑
   
@@ -1666,23 +1677,32 @@ const RightPanel: React.FC<RightPanelProps> = (props) => {
       )}
 
       {/* 第5次违规警告弹窗 */}
-      {showViolationWarning && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-sm mx-4 shadow-2xl">
-            <h3 className="text-lg font-bold text-orange-500 mb-3">⚠️ 违规警告</h3>
-            <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+      <Dialog open={showViolationWarning} onOpenChange={setShowViolationWarning}>
+        <DialogContent className="sm:max-w-md" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-500">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+                <path d="M12 9v4"/>
+                <path d="M12 17h.01"/>
+              </svg>
+              违规警告
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground pt-2">
               您已累计提交 5 次违规任务。<br />
               恶意提交违规任务 10 次，恶意提交积分返还一半。
-            </p>
-            <button
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="sm:justify-center">
+            <Button
               onClick={() => setShowViolationWarning(false)}
-              className="w-full py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium transition-colors"
+              className="w-full"
             >
               我知道了
-            </button>
-          </div>
-        </div>
-      )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

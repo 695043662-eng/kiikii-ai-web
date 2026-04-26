@@ -4121,7 +4121,8 @@ function CanvasContent({
     });
     
     // #299 优化：增加留白间距，确保边框与内容不重叠
-    const PADDING = 10;
+    // 注意：这是画布坐标，会被 zoom 缩放显示
+    const PADDING = 20;
     
     return {
       x: minX - PADDING,
@@ -8095,7 +8096,7 @@ function CanvasContent({
               zIndex: 25,
             }}
           >
-            {/* 四角控制点 */}
+            {/* 四角控制点 - 圆形 */}
             {['nw', 'ne', 'sw', 'se'].map(corner => {
               const isLeft = corner.includes('w');
               const isTop = corner.includes('n');
@@ -8104,17 +8105,18 @@ function CanvasContent({
                   key={corner}
                   style={{
                     position: 'absolute',
-                    left: isLeft ? -5 : 'auto',
-                    right: isLeft ? 'auto' : -5,
-                    top: isTop ? -5 : 'auto',
-                    bottom: isTop ? 'auto' : -5,
-                    width: 10,
-                    height: 10,
+                    left: isLeft ? -6 : 'auto',
+                    right: isLeft ? 'auto' : -6,
+                    top: isTop ? -6 : 'auto',
+                    bottom: isTop ? 'auto' : -6,
+                    width: 12,
+                    height: 12,
                     background: '#fff',
-                    border: '2px solid #888',  // 与边框同色
-                    borderRadius: 2,
+                    border: '2px solid #888',
+                    borderRadius: '50%',  // 圆形
                     cursor: `${corner}-resize`,
                     pointerEvents: 'auto',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',  // 轻微阴影
                   }}
                   onMouseDown={(e) => handleSelectionResizeStart(e, corner)}
                 />

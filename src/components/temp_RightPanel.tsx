@@ -862,13 +862,6 @@ const RightPanel: React.FC<RightPanelProps> = (props) => {
             )}
             <div className="flex-1" />
             
-            {/* 违规次数警告 - 第5次开始显示 */}
-            {failedAttempts >= 5 && (
-              <div className="text-xs text-orange-500 px-2">
-                恶意提交违规任务10次，恶意提交积分返还一半。
-              </div>
-            )}
-            
             <button 
               className="px-4 py-1.5 text-xs bg-gray-900 dark:bg-gray-700 hover:bg-gray-700 dark:hover:bg-gray-600 rounded-lg text-white transition-colors flex items-center gap-1.5 whitespace-nowrap flex-shrink-0"
               onClick={handleSend}

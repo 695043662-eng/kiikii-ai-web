@@ -6680,7 +6680,7 @@ function CanvasContent({
               style={{
                 width: '100%',
                 height: '100%',
-                borderRadius: 20,
+                borderRadius: 12,
                 boxShadow: isSelected ? '0 0 0 2px #40A9FF' : '0 0 0 2px rgba(59, 130, 246, 0.6)',
                 position: 'relative',
                 overflow: 'hidden',
@@ -6820,7 +6820,7 @@ function CanvasContent({
               pointerEvents: isThisCropping ? 'none' : 'none',
               display: 'block',
               backgroundColor: '#f5f5f5',
-              borderRadius: 4,
+              borderRadius: 12,
               // 使用 box-shadow 替代 border，避免选中时尺寸变化
               boxShadow: 'none',
               opacity: el.opacity,
@@ -8002,7 +8002,7 @@ function CanvasContent({
                   width: screenW,
                   height: screenH,
                   border: isGroup ? '2px dashed #8b5cf6' : '2px solid #888',
-                  borderRadius: isGroup ? 8 : 0,
+                  borderRadius: isGroup ? 8 : 12,
                   pointerEvents: 'none',
                   zIndex: 20
                 }}

@@ -8091,7 +8091,7 @@ function CanvasContent({
               width: selectionBox.width * zoom,
               height: selectionBox.height * zoom,
               border: '2px dashed #888',  // 浅灰色虚线
-              borderRadius: 10 * zoom,  // 四角圆角，跟随缩放
+              borderRadius: 16 * zoom,  // 四角圆角，跟随缩放，更大更明显
               pointerEvents: 'none',
               zIndex: 25,
             }}

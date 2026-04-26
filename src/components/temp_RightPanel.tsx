@@ -891,7 +891,7 @@ const RightPanel: React.FC<RightPanelProps> = (props) => {
             {/* 违规次数警告 */}
             {!accountLocked && failedAttempts > 0 && (
               <div className="text-xs text-orange-500 px-2">
-                恶意提交违规任务10次，将锁定账户 10 分钟
+                恶意提交违规任务10次，将锁定账户 10 分钟。恶意提交积分不返还。
               </div>
             )}
             

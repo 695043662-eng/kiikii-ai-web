@@ -17,6 +17,7 @@ export interface CachedUserInfo {
   nickname: string;
   avatar?: string;
   credits: number;
+  failed_attempts?: number;  // #301 违规计数
   created_at: string;
 }
 

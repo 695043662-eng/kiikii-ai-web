@@ -1214,6 +1214,18 @@ export async function POST(request: NextRequest) {
                 const finalCreditsBalance = refundResult.newBalance ?? creditsBalanceAfterDeduct;
                 const finalRefundAmount = refundResult.refundAmount;
                 
+                // ====== #301 违规计数：检查是否有违规失败 ======
+                const violationCount = imageItems.filter(i => 
+                  i.status === 'failed' && 
+                  (i.error === '内容违规' || i.error === '输入内容违规' || 
+                   i.error?.includes('moderation') || i.error?.includes('forbidden'))
+                ).length;
+                if (violationCount > 0 && actualUserId) {
+                  console.log(`[SSE] #301 检测到 ${violationCount} 张违规失败，增加违规计数`);
+                  const failedResult = await incrementFailedAttempts(actualUserId);
+                  console.log(`[违规计数] 用户 ${actualUserId} 违规次数: ${failedResult.failedAttempts}/${failedResult.failedAttempts + failedResult.remainingAttempts}`);
+                }
+                
                 // 收集所有成功图片
                 const completedUrls = imageItems
                   .filter(i => i.status === 'completed' && i.url)
@@ -1264,6 +1276,18 @@ export async function POST(request: NextRequest) {
                     `任务全部失败`
                   );
                   const creditsBalanceAfter = refundResult.newBalance ?? creditsBalanceAfterDeduct;
+                  
+                  // ====== #301 违规计数：检查是否有违规失败 ======
+                  const violationCount = imageItems.filter(i => 
+                    i.status === 'failed' && 
+                    (i.error === '内容违规' || i.error === '输入内容违规' || 
+                     i.error?.includes('moderation') || i.error?.includes('forbidden'))
+                  ).length;
+                  if (violationCount > 0 && actualUserId) {
+                    console.log(`[SSE] #301 任务失败中检测到 ${violationCount} 张违规失败，增加违规计数`);
+                    const failedResult = await incrementFailedAttempts(actualUserId);
+                    console.log(`[违规计数] 用户 ${actualUserId} 违规次数: ${failedResult.failedAttempts}/${failedResult.failedAttempts + failedResult.remainingAttempts}`);
+                  }
                   
                   if (!isControllerClosed) {
                     sendEvent({ 

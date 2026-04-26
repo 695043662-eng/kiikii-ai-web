@@ -5153,6 +5153,48 @@ WHERE reference_id IS NOT NULL;
 
 ---
 
+## #301 违规计数弹窗不触发
+
+**问题**：用户违规超过5次，警告弹窗仍然没有弹出
+
+**根因分析**：
+1. **用户 API 未返回 `failed_attempts` 字段**：`/api/user/info` 的 select 查询中没有包含该字段
+2. **前端未设置 `failedAttempts` 状态**：`refreshUserInfo` 函数没有设置 `setFailedAttempts`
+3. **SSE 路由缺少违规计数逻辑**：只有 webhook 中有违规计数，SSE 路由没有
+4. **完成后未刷新用户信息**：前端 `onComplete` 回调没有刷新用户信息获取最新违规计数
+
+**修复方案**：
+1. `/api/user/info/route.ts`：select 查询添加 `failed_attempts` 字段
+2. `src/lib/user-cache.ts`：`CachedUserInfo` 类型添加 `failed_attempts` 字段
+3. `src/contexts/AIGeneratorContext.tsx`：
+   - `refreshUserInfo` 函数添加 `setFailedAttempts(userInfo.failed_attempts || 0)`
+   - `onComplete` 回调末尾添加 `refreshUserInfo()` 刷新违规计数
+   - `onError` 回调添加 `refreshUserInfo()` 刷新违规计数
+4. `src/app/api/image-to-image/route.ts`：
+   - 任务完成时检测违规失败并调用 `incrementFailedAttempts`
+   - 任务失败时检测违规失败并调用 `incrementFailedAttempts`
+
+**违规检测条件**：
+```typescript
+const isViolation = 
+  error === '内容违规' || 
+  error === '输入内容违规' || 
+  error?.includes('moderation') || 
+  error?.includes('forbidden');
+```
+
+**验证结果**：
+- ✅ 类型检查通过
+- ✅ 服务运行正常
+- ⏳ 待真人模拟验证
+
+---
+
+### 状态
+✅ 已修复
+
+---
+
 ## #300 管理后台用户积分记录无法换页
 
 **问题**：管理后台用户的积分流水记录只显示最近条目，无法换页查看更多

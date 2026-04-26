@@ -295,8 +295,13 @@ export function AIGeneratorProvider({ children }: { children: React.ReactNode })
   const FAILED_ATTEMPTS_THRESHOLD = 10;  // 与后端保持一致
   
   // ========== 用户信息刷新函数 ==========
-  const refreshUserInfo = useCallback(async () => {
+  const refreshUserInfo = useCallback(async (forceRefresh = false) => {
     try {
+      // #301 如果是强制刷新（如违规计数更新），先清除缓存
+      if (forceRefresh) {
+        clearCachedUser();
+      }
+      
       // 🔒 军规：fetchUserWithCache 内部已处理首次刷新逻辑
       const userInfo = await fetchUserWithCache();
       if (userInfo) {
@@ -304,13 +309,15 @@ export function AIGeneratorProvider({ children }: { children: React.ReactNode })
         setUserId(userInfo.id || null);
         userIdRef.current = userInfo.id || null;  // #232 修复：同步更新 ref
         setIsLoggedIn(true);
-        console.log('[AIGeneratorContext] 用户信息刷新成功, userId:', userInfo.id);
+        setFailedAttempts(userInfo.failed_attempts || 0);  // #301 设置违规计数
+        console.log('[AIGeneratorContext] 用户信息刷新成功, userId:', userInfo.id, 'failedAttempts:', userInfo.failed_attempts);
         return userInfo;
       } else {
         setCredits(0);
         setUserId(null);
         userIdRef.current = null;  // #232 修复：同步更新 ref
         setIsLoggedIn(false);
+        setFailedAttempts(0);  // #301 重置违规计数
         console.log('[AIGeneratorContext] 用户信息刷新失败, userId 为 null');
         return null;
       }
@@ -571,12 +578,11 @@ export function AIGeneratorProvider({ children }: { children: React.ReactNode })
                 newCredits: genResult.creditsBalance,
               }
             }));
-          } else {
-            // ⚠️ 如果 SSE 没返回余额，查询最新余额
-            console.warn('[AIGeneratorContext] SSE 未返回余额，触发查询');
-            clearCachedUser();
-            refreshUserInfo();
           }
+          
+          // #301 刷新用户信息以获取最新的 failedAttempts（违规计数）- 强制刷新跳过缓存
+          console.log('[AIGeneratorContext] #301 强制刷新用户信息获取最新违规计数...');
+          refreshUserInfo(true);  // true = 强制刷新，跳过缓存
           
           // #232 统一 API 枢纽：唯一的历史记录保存入口
           // 只有在任务有 taskId 时才保存（确保主键存在）
@@ -651,7 +657,13 @@ export function AIGeneratorProvider({ children }: { children: React.ReactNode })
         },
         
         // 错误回调
-        onError: options.onError,
+        onError: (error) => {
+          console.log('[AIGeneratorContext] #301 onError 收到错误，强制刷新用户信息获取最新违规计数');
+          // #301 强制刷新用户信息以获取最新的 failedAttempts（违规计数）
+          refreshUserInfo(true);  // true = 强制刷新，跳过缓存
+          // 调用外部错误回调
+          options.onError?.(error);
+        },
       });
       
       return result;

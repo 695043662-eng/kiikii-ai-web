@@ -6823,7 +6823,7 @@ function CanvasContent({
               backgroundColor: '#f5f5f5',
               borderRadius: 4,
               // 使用 box-shadow 替代 border，避免选中时尺寸变化
-              boxShadow: isSelected ? '0 0 0 2px #40A9FF' : 'none',
+              boxShadow: 'none',
               opacity: el.opacity,
             }}
             draggable={false}
@@ -8002,7 +8002,7 @@ function CanvasContent({
                   top: screenY,
                   width: screenW,
                   height: screenH,
-                  border: isGroup ? '2px dashed #8b5cf6' : '2px solid #3b82f6',
+                  border: isGroup ? '2px dashed #8b5cf6' : '2px solid #40A9FF',
                   borderRadius: el.type === 'rectangle' ? 4 : 0,
                   pointerEvents: 'none',
                   zIndex: 20
@@ -8069,7 +8069,7 @@ function CanvasContent({
                       width: 10,
                       height: 10,
                       backgroundColor: '#fff',
-                      border: '2px solid #3b82f6',
+                      border: '2px solid #40A9FF',
                       borderRadius: '50%',
                       cursor: corner.includes('left') && corner.includes('top') || corner.includes('right') && corner.includes('bottom') ? 'nwse-resize' : 'nesw-resize',
                       zIndex: 21

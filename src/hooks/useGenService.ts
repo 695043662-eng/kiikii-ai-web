@@ -163,6 +163,10 @@ export interface GenServiceResult {
   taskId: string;
   success: boolean;
   message?: string;
+  // 账户锁定状态
+  locked?: boolean;
+  lockedUntil?: string;
+  remainingMinutes?: number;
 }
 
 // 任务状态（用于轮询）
@@ -609,6 +613,13 @@ export function useGenService() {
             if (errData.currentCredits !== undefined) {
               errorMsg = `积分不足（当前: ${errData.currentCredits}, 需要: ${errData.requiredCredits}）`;
             }
+            
+            // ====== 账户锁定检测 ======
+            if (errData.locked) {
+              console.log('[GenService] 账户已锁定:', errData.lockedUntil, '剩余', errData.remainingMinutes, '分钟');
+              // 返回锁定状态，让调用方处理
+              throw new Error(`ACCOUNT_LOCKED:${errData.lockedUntil}:${errData.remainingMinutes}`);
+            }
           }
         } catch (jsonError: any) {
           // 如果是我们主动跳转的错误，继续抛出
@@ -685,6 +696,31 @@ export function useGenService() {
         // ⚠️ 防御5：用户取消，释放锁
         requestLock.release();
         return { taskId, success: false, message: '用户取消' };
+      }
+      
+      // ====== 账户锁定处理 ======
+      if (error.message?.startsWith('ACCOUNT_LOCKED:')) {
+        const parts = error.message.split(':');
+        const lockedUntil = parts[1];
+        const remainingMinutes = parseInt(parts[2]) || 10;
+        console.log('[GenService] 账户锁定:', lockedUntil, '剩余', remainingMinutes, '分钟');
+        
+        // 清理占位符
+        if (placeholderReplacements.length > 0) {
+          placeholderReplacements.forEach(({ placeholderId }) => {
+            config.onPlaceholderFailed?.(placeholderId, `账户已锁定，请 ${remainingMinutes} 分钟后重试`);
+          });
+        }
+        
+        requestLock.release();
+        return { 
+          taskId, 
+          success: false, 
+          message: `账户已锁定，请 ${remainingMinutes} 分钟后重试`,
+          locked: true,
+          lockedUntil,
+          remainingMinutes,
+        };
       }
       
       console.error('[GenService] 请求失败:', error);

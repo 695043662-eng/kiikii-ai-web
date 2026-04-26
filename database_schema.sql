@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS users (
   credits INTEGER DEFAULT 0,
   password VARCHAR(255),
   is_active BOOLEAN DEFAULT true,
+  failed_attempts INTEGER DEFAULT 0,          -- 连续违规失败次数
+  locked_until TIMESTAMPTZ DEFAULT NULL,     -- 账户锁定截止时间
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ
 );

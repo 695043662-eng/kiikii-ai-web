@@ -28,6 +28,36 @@ import { useAIGenerator } from '@/contexts/AIGeneratorContext';
 import { deleteReferenceImage } from '@/lib/dialog-data-db';
 
 // ============================================
+// 【锁定倒计时组件】
+// ============================================
+const LockCountdown: React.FC<{ lockedUntil: string }> = ({ lockedUntil }) => {
+  const [remaining, setRemaining] = React.useState('');
+  
+  React.useEffect(() => {
+    const updateRemaining = () => {
+      const lockTime = new Date(lockedUntil).getTime();
+      const now = Date.now();
+      const diff = Math.max(0, lockTime - now);
+      
+      if (diff === 0) {
+        setRemaining('已解锁');
+        return;
+      }
+      
+      const minutes = Math.floor(diff / 60000);
+      const seconds = Math.floor((diff % 60000) / 1000);
+      setRemaining(`${minutes}:${seconds.toString().padStart(2, '0')}`);
+    };
+    
+    updateRemaining();
+    const timer = setInterval(updateRemaining, 1000);
+    return () => clearInterval(timer);
+  }, [lockedUntil]);
+  
+  return <span>({remaining})</span>;
+};
+
+// ============================================
 // 【类型定义 - 与原 page.tsx 完全一致】
 // ============================================
 
@@ -208,6 +238,9 @@ function AspectRatioIcon({ ratio, selected }: { ratio: string; selected?: boolea
 const RightPanel: React.FC<RightPanelProps> = (props) => {
   // 使用 AIGenerator Context 获取状态
   const aiState = useAIGenerator();
+  
+  // 解构账户锁定状态
+  const { accountLocked, lockedUntil, failedAttempts, FAILED_ATTEMPTS_THRESHOLD } = aiState;
   
   // 解构所有 props，确保变量名与原代码 100% 一致
   const {
@@ -846,9 +879,26 @@ const RightPanel: React.FC<RightPanelProps> = (props) => {
               </button>
             )}
             <div className="flex-1" />
+            
+            {/* 账户锁定提示 */}
+            {accountLocked && lockedUntil && (
+              <div className="flex items-center gap-1 px-2 py-1 bg-red-500 text-white text-xs rounded-lg">
+                <span>账户已锁定</span>
+                <LockCountdown lockedUntil={lockedUntil} />
+              </div>
+            )}
+            
+            {/* 违规次数警告 */}
+            {!accountLocked && failedAttempts > 0 && (
+              <div className="text-xs text-orange-500 px-2">
+                剩余 {FAILED_ATTEMPTS_THRESHOLD - failedAttempts} 次
+              </div>
+            )}
+            
             <button 
-              className="px-4 py-1.5 text-xs bg-gray-900 dark:bg-gray-700 hover:bg-gray-700 dark:hover:bg-gray-600 rounded-lg text-white transition-colors flex items-center gap-1.5 whitespace-nowrap flex-shrink-0"
+              className="px-4 py-1.5 text-xs bg-gray-900 dark:bg-gray-700 hover:bg-gray-700 dark:hover:bg-gray-600 rounded-lg text-white transition-colors flex items-center gap-1.5 whitespace-nowrap flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={handleSend}
+              disabled={accountLocked}
             >
               <span>发送</span>
               <Send className="w-3 h-3" />

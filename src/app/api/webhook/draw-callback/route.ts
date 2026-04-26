@@ -4,7 +4,7 @@ import { uploadToCOS, getSignedUrl } from '@/lib/cos';
 import { getSupabaseClient } from '@/storage/database/supabase-client';
 import { safeErrorLog, safeLog } from '@/lib/errorHandler';
 import { loadTaskMapping, deleteTaskMapping } from '@/lib/taskMapping';
-import { handlePartialRefund } from '@/lib/credits';
+import { handlePartialRefund, incrementFailedAttempts, resetFailedAttempts } from '@/lib/credits';
 import fs from 'fs';
 import path from 'path';
 
@@ -385,6 +385,12 @@ export async function POST(request: NextRequest) {
         console.log(`[Webhook] 检查保存条件: isAllCompleted=${isAllCompleted}, userId=${mappingResult.userId || '无'}, validUrls=${validUrls.length}`);
         if (isAllCompleted && mappingResult.userId && validUrls.length > 0) {
           console.log(`[Webhook] 开始保存到数据库...`);
+          
+          // ====== 成功生成，重置失败计数 ======
+          if (validUrls.length > 0) {
+            await resetFailedAttempts(mappingResult.userId);
+          }
+          
           saveToDatabase(
             mainTaskId,
             mappingResult.userId,
@@ -503,6 +509,16 @@ export async function POST(request: NextRequest) {
               }
             } catch (err) {
               console.error(`[积分补偿] #282 Webhook退还异常:`, err);
+            }
+            
+            // ====== 违规失败时增加失败计数 ======
+            if (isViolation && mappingResult.userId) {
+              const failedResult = await incrementFailedAttempts(mappingResult.userId);
+              if (failedResult.locked) {
+                console.log(`[账户锁定] 用户 ${mappingResult.userId} 因连续违规被锁定`);
+              } else {
+                console.log(`[违规计数] 用户 ${mappingResult.userId} 剩余 ${failedResult.remainingAttempts} 次机会`);
+              }
             }
           }
         }

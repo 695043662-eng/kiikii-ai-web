@@ -64,7 +64,7 @@ import { getTaskResult, setTaskResult, TaskResult } from '@/lib/taskResultsCache
 import { getSupabaseClient } from '@/storage/database/supabase-client';
 import { storeReferenceImage } from '@/lib/reference-image-store';
 import { getImageAPIConfig, getModelAPIConfig, getModelAPIConfigFull, buildRequest } from '@/lib/api-config';
-import { calculateCredits, deductCredits, checkCreditsSufficient, refundCredits, handlePartialRefund, handleFullRefund } from '@/lib/credits';
+import { calculateCredits, deductCredits, checkCreditsSufficient, refundCredits, handlePartialRefund, handleFullRefund, incrementFailedAttempts, resetFailedAttempts } from '@/lib/credits';
 import { createErrorResponse, safeErrorLog, safeLog } from '@/lib/errorHandler';
 import { checkUserRateLimit, generationCircuitBreaker } from '@/lib/rateLimit';
 import { saveTaskMapping } from '@/lib/taskMapping';
@@ -1328,6 +1328,11 @@ export async function POST(request: NextRequest) {
                     creditsRefunded: refundResult.refundAmount,
                     creditsBalance: creditsBalanceAfter,
                   });
+                }
+                
+                // ====== 成功生成，重置失败计数 ======
+                if (actualUserId && completedImageUrls.length > 0) {
+                  await resetFailedAttempts(actualUserId);
                 }
                 
                   console.log(`[SSE] 任务完成: ${actualTaskId}, ${completedImageUrls.length}/${generationCount} 张图片`);

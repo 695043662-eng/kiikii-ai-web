@@ -5153,6 +5153,37 @@ WHERE reference_id IS NOT NULL;
 
 ---
 
+## #300 管理后台用户积分记录无法换页
+
+**问题**：管理后台用户的积分流水记录只显示最近条目，无法换页查看更多
+
+**根因**：
+1. `fetchUserCreditLogs` 函数固定获取最近50条，没有分页参数
+2. 前端没有分页状态和分页按钮
+
+**修复方案**：
+1. 添加分页状态 `selectedUserCreditLogsPagination`
+2. 修改 `fetchUserCreditLogs` 函数支持分页参数
+3. 在积分流水表格下方添加分页按钮（上一页/下一页）
+4. 每页显示20条记录
+
+**修改文件**：
+- `src/app/linjiaqi/page.tsx`
+  - 添加 `selectedUserCreditLogsPagination` 状态
+  - 修改 `fetchUserCreditLogs(userId, page)` 添加 page 参数
+  - 添加分页按钮 UI（显示总条数、当前页/总页数、上一页/下一页按钮）
+
+**验证结果**：
+- ✅ 类型检查通过
+- ✅ 服务运行正常
+
+---
+
+### 状态
+✅ 已修复
+
+---
+
 ## #299 积分返还严重问题 - 重复返还导致越返越多
 
 **问题**：用户失败越返越多！积分返还逻辑有严重并发问题！

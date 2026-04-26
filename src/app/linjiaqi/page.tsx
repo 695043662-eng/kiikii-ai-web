@@ -428,6 +428,7 @@ export default function AdminDashboard() {
   const [searchEmail, setSearchEmail] = useState('');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [selectedUserCreditLogs, setSelectedUserCreditLogs] = useState<any[]>([]); // #291 用户详情对话框中的积分流水
+  const [selectedUserCreditLogsPagination, setSelectedUserCreditLogsPagination] = useState({ page: 1, pageSize: 20, total: 0, totalPages: 0 }); // #300 分页
   const [showUserDialog, setShowUserDialog] = useState(false);
   const [showAddUserDialog, setShowAddUserDialog] = useState(false);
   const [showAddCreditsDialog, setShowAddCreditsDialog] = useState(false);
@@ -1167,18 +1168,22 @@ export default function AdminDashboard() {
   };
 
   // #291 获取单个用户的积分流水（用于用户详情对话框）
-  const fetchUserCreditLogs = async (userId: string) => {
+  // #300 添加分页支持
+  const fetchUserCreditLogs = async (userId: string, page = 1) => {
     try {
       const params = new URLSearchParams();
       params.set('user_id', userId);
-      params.set('page_size', '50'); // 显示最近50条
+      params.set('page', String(page));
+      params.set('page_size', '20'); // #300 改为20条每页
       
       const res = await fetch(`/api/linjiaqi/credit-logs?${params.toString()}`, { credentials: 'include' });
       const data = await res.json();
       setSelectedUserCreditLogs(data.data || []);
+      setSelectedUserCreditLogsPagination(data.pagination || { page: 1, pageSize: 20, total: 0, totalPages: 0 });
     } catch (error) {
       console.error('Error fetching user credit logs:', error);
       setSelectedUserCreditLogs([]);
+      setSelectedUserCreditLogsPagination({ page: 1, pageSize: 20, total: 0, totalPages: 0 });
     }
   };
 
@@ -4268,6 +4273,7 @@ export default function AdminDashboard() {
                     const display = [...enriched].reverse();
                     
                     return (
+                      <>
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -4337,6 +4343,42 @@ export default function AdminDashboard() {
                           ))}
                         </TableBody>
                       </Table>
+                      
+                      {/* #300 分页按钮 */}
+                      {selectedUserCreditLogsPagination.totalPages > 1 && (
+                        <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                          <div className="text-sm text-gray-500">
+                            共 {selectedUserCreditLogsPagination.total} 条记录，第 {selectedUserCreditLogsPagination.page} / {selectedUserCreditLogsPagination.totalPages} 页
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={selectedUserCreditLogsPagination.page <= 1}
+                              onClick={() => {
+                                if (selectedUser) {
+                                  fetchUserCreditLogs(selectedUser.id, selectedUserCreditLogsPagination.page - 1);
+                                }
+                              }}
+                            >
+                              上一页
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={selectedUserCreditLogsPagination.page >= selectedUserCreditLogsPagination.totalPages}
+                              onClick={() => {
+                                if (selectedUser) {
+                                  fetchUserCreditLogs(selectedUser.id, selectedUserCreditLogsPagination.page + 1);
+                                }
+                              }}
+                            >
+                              下一页
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                      </>
                     );
                   })()}
                 </div>

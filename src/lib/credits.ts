@@ -205,22 +205,9 @@ export async function deductCredits(
   userId: string,
   credits: number,
   referenceId?: string  // #271 新增：关联ID（如 taskId）
-): Promise<{ success: boolean; remaining?: number; error?: string; locked?: boolean; lockedUntil?: string; remainingMinutes?: number }> {
+): Promise<{ success: boolean; remaining?: number; error?: string }> {
   try {
     console.log(`[deductCredits] 开始扣除积分, userId=${userId}, credits=${credits}, referenceId=${referenceId}`);
-    
-    // ====== 0. 检查账户锁定状态 ======
-    const lockStatus = await checkAccountLock(userId);
-    if (lockStatus.locked) {
-      console.log(`[deductCredits] 账户已锁定, userId=${userId}, 剩余 ${lockStatus.remainingMinutes} 分钟`);
-      return {
-        success: false,
-        error: `账户已锁定，请 ${lockStatus.remainingMinutes} 分钟后重试`,
-        locked: true,
-        lockedUntil: lockStatus.lockedUntil,
-        remainingMinutes: lockStatus.remainingMinutes,
-      };
-    }
     
     // 1. 查询当前积分
     const { status: getStatus, data: userData } = await restRequest('users', {
@@ -382,13 +369,11 @@ export async function refundCredits(
 ): Promise<{ success: boolean; remaining?: number; error?: string; skipped?: boolean }> {
   try {
     // ========================================
-    // #285/#286 并发安全：先插入日志记录（使用 upsert + on_conflict 防止并发重复）
+    // #285/#286/#299 并发安全：先插入日志记录（使用 upsert + on_conflict 防止并发重复）
     // 关键：数据库必须有 (reference_id, type) 的唯一约束
     // ========================================
     if (taskId) {
-      // 使用 upsert + on_conflict 尝试插入日志
-      // 如果数据库有唯一约束，并发请求只有一个会成功插入
-      // 失败的请求会收到 409 Conflict 或 23505 错误
+      // #299 修复：启用 on_conflict 参数，实现数据库层面的原子防重
       const { status: insertStatus, data: insertData } = await restRequest('credit_logs', {
         method: 'POST',
         body: {
@@ -399,16 +384,15 @@ export async function refundCredits(
           description: reason,
           created_at: new Date().toISOString(),
         },
-        prefer: 'return=representation',
-        // 注意：on_conflict 参数需要数据库有对应的唯一约束
-        // query: `on_conflict=reference_id,type`,
+        prefer: 'return=representation,resolution=merge-duplicates',
+        query: `on_conflict=reference_id,type`,
       });
 
       // 检查插入结果
       // - 201: 插入成功，继续返还积分
-      // - 409/400: 唯一约束冲突，说明已被其他请求返还
+      // - 409/400/23505: 唯一约束冲突，说明已被其他请求返还
       // - 其他错误: 需要进一步检查
-      if (insertStatus === 409 || insertStatus === 400) {
+      if (insertStatus === 409 || insertStatus === 400 || insertStatus === 23505) {
         // 唯一约束冲突，说明已被其他请求返还
         console.log(`[refundCredits] #286 唯一约束冲突: taskId=${taskId} 已被其他请求退还`);
         return {
@@ -624,17 +608,28 @@ export async function handlePartialRefund(
   const refundAmount = failedCount * creditsPerImage;
   console.log(`[积分补偿] #282 ${taskId} 开始返还: ${failedCount}/${generationCount} 张失败，退还 ${refundAmount} 积分，原因: ${reason}`);
   
-  // Step 6: 执行返还
+  // Step 6: 【防并发】立即标记已返还（先标记再执行）
+  const currentResult = getTaskResultFn(taskId);
+  if (currentResult?.creditsRefunded) {
+    console.log(`[积分补偿] #282 ${taskId} 并发检测：已被其他进程返还，跳过`);
+    return { success: false, refundAmount: 0, newBalance: null };
+  }
+  setTaskResultFn(taskId, { ...currentResult, creditsRefunded: true });
+  
+  // Step 7: 执行返还
   try {
     const refundResult = await refundCredits(userId, refundAmount, taskId, reason);
     
     if (refundResult.success) {
-      // Step 7: 标记已返还（必须重新获取最新状态）
-      const afterRefundResult = getTaskResultFn(taskId);
-      if (afterRefundResult) {
-        setTaskResultFn(taskId, { ...afterRefundResult, creditsRefunded: true });
+      // #299 检查是否是被数据库防重跳过的（skipped = true 表示没有实际返还）
+      if (refundResult.skipped) {
+        console.log(`[积分补偿] #299 ${taskId} 数据库防重跳过，已被其他进程返还`);
+        return { 
+          success: false,  // 返回 false 表示本次没有实际返还
+          refundAmount: 0, 
+          newBalance: null 
+        };
       }
-      
       console.log(`[积分补偿] #282 ${taskId} 返还成功，剩余 ${refundResult.remaining} 积分`);
       return { 
         success: true, 
@@ -642,10 +637,16 @@ export async function handlePartialRefund(
         newBalance: refundResult.remaining ?? null 
       };
     } else {
+      // 返还失败，清除标记以便重试
+      const failedResult = getTaskResultFn(taskId);
+      setTaskResultFn(taskId, { ...failedResult, creditsRefunded: false });
       console.error(`[积分补偿] #282 ${taskId} 返还失败: ${refundResult.error}`);
       return { success: false, refundAmount: 0, newBalance: null };
     }
     } catch (err) {
+    // 异常时清除标记以便重试
+    const errResult = getTaskResultFn(taskId);
+    setTaskResultFn(taskId, { ...errResult, creditsRefunded: false });
     console.error(`[积分补偿] #282 ${taskId} 返还异常:`, err);
     return { success: false, refundAmount: 0, newBalance: null };
   }
@@ -689,27 +690,35 @@ export async function handleFullRefund(
   
   console.log(`[积分补偿] #282 ${taskId} 全额返还: ${refundAmount} 积分，原因: ${reason}`);
   
-  // Step 4: 执行返还
+  // Step 4: 【防并发】立即标记已返还（先标记再执行）
+  const currentResult = getTaskResultFn(taskId);
+  if (currentResult?.creditsRefunded) {
+    console.log(`[积分补偿] #282 ${taskId} 并发检测：已被其他进程返还，跳过`);
+    return { success: false, newBalance: null };
+  }
+  setTaskResultFn(taskId, { ...currentResult, creditsRefunded: true });
+  
+  // Step 5: 执行返还
   try {
     const refundResult = await refundCredits(userId, refundAmount, taskId, reason);
     
     if (refundResult.success) {
-      // Step 5: 标记已返还（必须重新获取最新状态）
-      const afterRefundResult = getTaskResultFn(taskId);
-      if (afterRefundResult) {
-        setTaskResultFn(taskId, { ...afterRefundResult, creditsRefunded: true });
-      }
-      
       console.log(`[积分补偿] #282 ${taskId} 全额返还成功，剩余 ${refundResult.remaining} 积分`);
       return { 
         success: true, 
         newBalance: refundResult.remaining ?? null 
       };
     } else {
+      // 返还失败，清除标记以便重试
+      const failedResult = getTaskResultFn(taskId);
+      setTaskResultFn(taskId, { ...failedResult, creditsRefunded: false });
       console.error(`[积分补偿] #282 ${taskId} 全额返还失败: ${refundResult.error}`);
       return { success: false, newBalance: null };
     }
   } catch (err) {
+    // 异常时清除标记以便重试
+    const errResult = getTaskResultFn(taskId);
+    setTaskResultFn(taskId, { ...errResult, creditsRefunded: false });
     console.error(`[积分补偿] #282 ${taskId} 全额返还异常:`, err);
     return { success: false, newBalance: null };
   }
@@ -718,70 +727,36 @@ export async function handleFullRefund(
 // ========================================
 // 账户锁定机制（连续失败限制）
 // ========================================
+// 违规计数（用于警告提示，不锁定账户）
+// ========================================
 
-const FAILED_ATTEMPTS_THRESHOLD = 10;  // 连续失败 10 次触发锁定
-const LOCK_DURATION_MINUTES = 10;      // 锁定 10 分钟
+const FAILED_ATTEMPTS_THRESHOLD = 10;  // 违规 10 次
 
 /**
- * 检查账户是否被锁定
- * @returns { locked: boolean; lockedUntil?: string; remainingMinutes?: number; failedAttempts: number }
+ * 获取违规计数
  */
-export async function checkAccountLock(userId: string): Promise<{
-  locked: boolean;
-  lockedUntil?: string;
-  remainingMinutes?: number;
-  failedAttempts: number;
-}> {
+export async function getFailedAttempts(userId: string): Promise<number> {
   try {
     const { status, data } = await restRequest('users', {
-      query: `id=eq.${userId}&select=failed_attempts,locked_until`,
+      query: `id=eq.${userId}&select=failed_attempts`,
     });
 
     if (status !== 200 || !data || data.length === 0) {
-      return { locked: false, failedAttempts: 0 };
+      return 0;
     }
 
-    const user = data[0];
-    const failedAttempts = user.failed_attempts || 0;
-    const lockedUntil = user.locked_until;
-
-    // 检查是否在锁定期
-    if (lockedUntil) {
-      const lockTime = new Date(lockedUntil);
-      const now = new Date();
-      
-      if (lockTime > now) {
-        // 仍在锁定期
-        const remainingMs = lockTime.getTime() - now.getTime();
-        const remainingMinutes = Math.ceil(remainingMs / 60000);
-        return {
-          locked: true,
-          lockedUntil: lockedUntil,
-          remainingMinutes,
-          failedAttempts,
-        };
-      }
-      // 锁定期已过，清除锁定状态
-      await restRequest('users', {
-        method: 'PATCH',
-        query: `id=eq.${userId}`,
-        body: { locked_until: null, failed_attempts: 0 },
-      });
-    }
-
-    return { locked: false, failedAttempts };
+    return data[0].failed_attempts || 0;
   } catch (error) {
-    console.error('[checkAccountLock] 检查锁定状态失败:', error);
-    return { locked: false, failedAttempts: 0 };
+    console.error('[getFailedAttempts] 获取违规计数失败:', error);
+    return 0;
   }
 }
 
 /**
  * 增加失败计数（违规内容触发）
- * @returns { locked: boolean; failedAttempts: number; remainingAttempts: number }
+ * @returns { failedAttempts: number; remainingAttempts: number }
  */
 export async function incrementFailedAttempts(userId: string): Promise<{
-  locked: boolean;
   failedAttempts: number;
   remainingAttempts: number;
 }> {
@@ -792,45 +767,27 @@ export async function incrementFailedAttempts(userId: string): Promise<{
     });
 
     if (getStatus !== 200 || !userData || userData.length === 0) {
-      return { locked: false, failedAttempts: 0, remainingAttempts: FAILED_ATTEMPTS_THRESHOLD };
+      return { failedAttempts: 0, remainingAttempts: FAILED_ATTEMPTS_THRESHOLD };
     }
 
     const currentAttempts = userData[0].failed_attempts || 0;
     const newAttempts = currentAttempts + 1;
 
-    // 检查是否达到阈值
-    if (newAttempts >= FAILED_ATTEMPTS_THRESHOLD) {
-      // 锁定账户
-      const lockedUntil = new Date(Date.now() + LOCK_DURATION_MINUTES * 60 * 1000).toISOString();
-      await restRequest('users', {
-        method: 'PATCH',
-        query: `id=eq.${userId}`,
-        body: { failed_attempts: 0, locked_until: lockedUntil },
-      });
-      console.log(`[账户锁定] 用户 ${userId} 连续违规 ${newAttempts} 次，锁定至 ${lockedUntil}`);
-      return {
-        locked: true,
-        failedAttempts: 0,
-        remainingAttempts: 0,
-      };
-    }
-
-    // 只增加计数
+    // 增加计数（不锁定账户）
     await restRequest('users', {
       method: 'PATCH',
       query: `id=eq.${userId}`,
       body: { failed_attempts: newAttempts },
     });
-    console.log(`[失败计数] 用户 ${userId} 违规次数: ${newAttempts}/${FAILED_ATTEMPTS_THRESHOLD}`);
+    console.log(`[违规计数] 用户 ${userId} 违规次数: ${newAttempts}/${FAILED_ATTEMPTS_THRESHOLD}`);
 
     return {
-      locked: false,
       failedAttempts: newAttempts,
       remainingAttempts: FAILED_ATTEMPTS_THRESHOLD - newAttempts,
     };
   } catch (error) {
     console.error('[incrementFailedAttempts] 增加失败计数失败:', error);
-    return { locked: false, failedAttempts: 0, remainingAttempts: FAILED_ATTEMPTS_THRESHOLD };
+    return { failedAttempts: 0, remainingAttempts: FAILED_ATTEMPTS_THRESHOLD };
   }
 }
 

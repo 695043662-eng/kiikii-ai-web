@@ -449,6 +449,11 @@ export async function POST(request: NextRequest) {
         const itemIndex = mappingResult.index;
         const existingResult = getTaskResult(mainTaskId);
         
+        // ====== 调试日志：检查 userId ======
+        console.log(`[Webhook] 失败处理 - mainTaskId: ${mainTaskId}, itemIndex: ${itemIndex}`);
+        console.log(`[Webhook] mappingResult.userId: ${mappingResult.userId || '空'}`);
+        console.log(`[Webhook] mappingResult.requestParams?.userId: ${mappingResult.requestParams?.userId || '空'}`);
+        
         if (existingResult) {
           // 更新错误列表
           const errors = [...(existingResult.errors || []), { index: itemIndex, error: finalErrorMsg }];
@@ -489,6 +494,8 @@ export async function POST(request: NextRequest) {
           
           // ====== #282 统一积分返还 ======
           if (isAllCompleted && mappingResult.userId) {
+            console.log(`[Webhook] 任务全部完成, isViolation=${isViolation}, userId=${mappingResult.userId}`);
+            
             const creditsPerImage = mappingResult.requestParams?.creditsPerImage || 0;
             const generationCount = mappingResult.requestParams?.generationCount || imageItems.length;
             
@@ -514,11 +521,7 @@ export async function POST(request: NextRequest) {
             // ====== 违规失败时增加失败计数 ======
             if (isViolation && mappingResult.userId) {
               const failedResult = await incrementFailedAttempts(mappingResult.userId);
-              if (failedResult.locked) {
-                console.log(`[账户锁定] 用户 ${mappingResult.userId} 因连续违规被锁定`);
-              } else {
-                console.log(`[违规计数] 用户 ${mappingResult.userId} 剩余 ${failedResult.remainingAttempts} 次机会`);
-              }
+              console.log(`[违规计数] 用户 ${mappingResult.userId} 违规次数: ${failedResult.failedAttempts}/${failedResult.failedAttempts + failedResult.remainingAttempts}`);
             }
           }
         }

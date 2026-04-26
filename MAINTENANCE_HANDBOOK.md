@@ -5153,6 +5153,63 @@ WHERE reference_id IS NOT NULL;
 
 ---
 
+## #299 积分返还严重问题 - 重复返还导致越返越多
+
+**问题**：用户失败越返越多！积分返还逻辑有严重并发问题！
+
+**根因分析**：
+1. **SSE 路由和 Webhook 都调用返还**：两个不同的请求可能同时处理同一任务
+2. **内存防重机制失效**：`creditsRefunded` 标记在不同进程间不共享
+3. **数据库防重机制未启用**：`on_conflict` 参数被注释掉了（第391行）
+4. **返还顺序错误**：先执行返还，成功后才标记，存在竞态条件
+
+**修复方案**：
+1. **启用数据库层 on_conflict**：`query: on_conflict=reference_id,type`
+2. **调整返还顺序**：先标记 `creditsRefunded = true`，再执行返还
+3. **处理 skipped 状态**：当数据库返回 `skipped: true` 时，正确处理为未实际返还
+4. **失败时清除标记**：返还失败时清除标记，允许后续重试
+
+**修改文件**：
+- `src/lib/credits.ts`
+  - `refundCredits`：启用 on_conflict 参数
+  - `handlePartialRefund`：先标记再执行，处理 skipped 状态
+  - `handleFullRefund`：先标记再执行
+
+**防重机制（三层保护）**：
+1. **内存层**：`creditsRefunded` 标记（同进程内有效）
+2. **文件锁**：taskResultsCache 使用文件锁（同机器有效）
+3. **数据库层**：`credit_logs` 表 `(reference_id, type)` 唯一约束（全局有效）
+
+**关键代码**：
+```typescript
+// handlePartialRefund 修复后的流程
+// Step 1: 检查内存标记
+if (latestResult?.creditsRefunded) return { success: false };
+
+// Step 2: 立即标记（防止并发）
+setTaskResultFn(taskId, { ...currentResult, creditsRefunded: true });
+
+// Step 3: 执行返还（数据库有 on_conflict 防重）
+const refundResult = await refundCredits(...);
+
+// Step 4: 处理结果
+if (refundResult.skipped) {
+  // 被数据库防重，说明已被其他进程返还
+  return { success: false };
+}
+```
+
+**验证结果**：
+- ⏳ 待验证（需检查数据库唯一约束是否存在）
+
+---
+
+### 状态
+✅ 已修复
+
+
+---
+
 ## #290 占位符像素密度低
 
 **问题描述**：

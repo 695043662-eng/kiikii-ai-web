@@ -28,36 +28,6 @@ import { useAIGenerator } from '@/contexts/AIGeneratorContext';
 import { deleteReferenceImage } from '@/lib/dialog-data-db';
 
 // ============================================
-// 【锁定倒计时组件】
-// ============================================
-const LockCountdown: React.FC<{ lockedUntil: string }> = ({ lockedUntil }) => {
-  const [remaining, setRemaining] = React.useState('');
-  
-  React.useEffect(() => {
-    const updateRemaining = () => {
-      const lockTime = new Date(lockedUntil).getTime();
-      const now = Date.now();
-      const diff = Math.max(0, lockTime - now);
-      
-      if (diff === 0) {
-        setRemaining('已解锁');
-        return;
-      }
-      
-      const minutes = Math.floor(diff / 60000);
-      const seconds = Math.floor((diff % 60000) / 1000);
-      setRemaining(`${minutes}:${seconds.toString().padStart(2, '0')}`);
-    };
-    
-    updateRemaining();
-    const timer = setInterval(updateRemaining, 1000);
-    return () => clearInterval(timer);
-  }, [lockedUntil]);
-  
-  return <span>({remaining})</span>;
-};
-
-// ============================================
 // 【类型定义 - 与原 page.tsx 完全一致】
 // ============================================
 
@@ -239,8 +209,20 @@ const RightPanel: React.FC<RightPanelProps> = (props) => {
   // 使用 AIGenerator Context 获取状态
   const aiState = useAIGenerator();
   
-  // 解构账户锁定状态
-  const { accountLocked, lockedUntil, failedAttempts, FAILED_ATTEMPTS_THRESHOLD } = aiState;
+  // 解构违规计数状态（用于警告提示）
+  const { failedAttempts, FAILED_ATTEMPTS_THRESHOLD } = aiState;
+  
+  // 第5次违规弹窗状态
+  const [showViolationWarning, setShowViolationWarning] = React.useState(false);
+  const prevFailedAttemptsRef = React.useRef(failedAttempts);
+  
+  // 监听 failedAttempts 变化，第5次时弹出警告
+  React.useEffect(() => {
+    if (failedAttempts >= 5 && prevFailedAttemptsRef.current < 5) {
+      setShowViolationWarning(true);
+    }
+    prevFailedAttemptsRef.current = failedAttempts;
+  }, [failedAttempts]);
   
   // 解构所有 props，确保变量名与原代码 100% 一致
   const {
@@ -880,25 +862,16 @@ const RightPanel: React.FC<RightPanelProps> = (props) => {
             )}
             <div className="flex-1" />
             
-            {/* 账户锁定提示 */}
-            {accountLocked && lockedUntil && (
-              <div className="flex items-center gap-1 px-2 py-1 bg-red-500 text-white text-xs rounded-lg">
-                <span>账户已锁定</span>
-                <LockCountdown lockedUntil={lockedUntil} />
-              </div>
-            )}
-            
-            {/* 违规次数警告 */}
-            {!accountLocked && failedAttempts > 0 && (
+            {/* 违规次数警告 - 第5次开始显示 */}
+            {failedAttempts >= 5 && (
               <div className="text-xs text-orange-500 px-2">
-                恶意提交违规任务10次，将锁定账户 10 分钟。恶意提交积分不返还。
+                恶意提交违规任务10次，恶意提交积分返还一半。
               </div>
             )}
             
             <button 
-              className="px-4 py-1.5 text-xs bg-gray-900 dark:bg-gray-700 hover:bg-gray-700 dark:hover:bg-gray-600 rounded-lg text-white transition-colors flex items-center gap-1.5 whitespace-nowrap flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-1.5 text-xs bg-gray-900 dark:bg-gray-700 hover:bg-gray-700 dark:hover:bg-gray-600 rounded-lg text-white transition-colors flex items-center gap-1.5 whitespace-nowrap flex-shrink-0"
               onClick={handleSend}
-              disabled={accountLocked}
             >
               <span>发送</span>
               <Send className="w-3 h-3" />
@@ -1690,6 +1663,25 @@ const RightPanel: React.FC<RightPanelProps> = (props) => {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 第5次违规警告弹窗 */}
+      {showViolationWarning && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-sm mx-4 shadow-2xl">
+            <h3 className="text-lg font-bold text-orange-500 mb-3">⚠️ 违规警告</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+              您已累计提交 5 次违规任务。<br />
+              恶意提交违规任务 10 次，恶意提交积分返还一半。
+            </p>
+            <button
+              onClick={() => setShowViolationWarning(false)}
+              className="w-full py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium transition-colors"
+            >
+              我知道了
+            </button>
           </div>
         </div>
       )}

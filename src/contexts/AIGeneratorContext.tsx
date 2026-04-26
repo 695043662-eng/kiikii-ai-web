@@ -193,11 +193,7 @@ export interface AIGeneratorContextType {
   setAuthMode: React.Dispatch<React.SetStateAction<'login' | 'register'>>;
   refreshUserInfo: () => Promise<any>;
 
-  // ========== 账户锁定状态 ==========
-  accountLocked: boolean;
-  setAccountLocked: React.Dispatch<React.SetStateAction<boolean>>;
-  lockedUntil: string | null;
-  setLockedUntil: React.Dispatch<React.SetStateAction<string | null>>;
+  // ========== 违规计数状态 ==========
   failedAttempts: number;
   setFailedAttempts: React.Dispatch<React.SetStateAction<number>>;
   FAILED_ATTEMPTS_THRESHOLD: number;
@@ -294,9 +290,7 @@ export function AIGeneratorProvider({ children }: { children: React.ReactNode })
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   
-  // ========== 账户锁定状态 ==========
-  const [accountLocked, setAccountLocked] = useState(false);
-  const [lockedUntil, setLockedUntil] = useState<string | null>(null);
+  // ========== 违规计数状态 ==========
   const [failedAttempts, setFailedAttempts] = useState(0);
   const FAILED_ATTEMPTS_THRESHOLD = 10;  // 与后端保持一致
   
@@ -660,13 +654,6 @@ export function AIGeneratorProvider({ children }: { children: React.ReactNode })
         onError: options.onError,
       });
       
-      // ====== 处理锁定状态 ======
-      if (result.locked) {
-        setAccountLocked(true);
-        setLockedUntil(result.lockedUntil || null);
-        console.log('[AIGeneratorContext] 账户已锁定:', result.lockedUntil, '剩余', result.remainingMinutes, '分钟');
-      }
-      
       return result;
     } finally {
       setIsGenerating(false);
@@ -834,9 +821,7 @@ export function AIGeneratorProvider({ children }: { children: React.ReactNode })
     authMode, setAuthMode,
     refreshUserInfo,
 
-    // 账户锁定状态
-    accountLocked, setAccountLocked,
-    lockedUntil, setLockedUntil,
+    // 违规计数状态
     failedAttempts, setFailedAttempts,
     FAILED_ATTEMPTS_THRESHOLD,
 
@@ -861,7 +846,7 @@ export function AIGeneratorProvider({ children }: { children: React.ReactNode })
     showFavoritesModal, favorites, newFavoriteContent, editingId, editingContent,
     inputValue, messages,
     credits, userId, isLoggedIn, authModalOpen, authMode, refreshUserInfo,
-    accountLocked, lockedUntil, failedAttempts,
+    failedAttempts,
     showCopyToast, infoDialog, previewImage,
     clearAllImages, handleGenerate, abortGenerate, isGenerating, saveHistoryRecord,
   ]);

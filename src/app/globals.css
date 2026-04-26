@@ -188,6 +188,15 @@ body {
   cursor: pointer !important;
 }
 
+/* 缩放手柄恢复缩放光标 - 覆盖 canvas-custom-cursor 的 !important */
+[data-canvas-area="true"] [data-resize-handle] {
+  cursor: nwse-resize !important;
+}
+[data-canvas-area="true"] [data-resize-handle="top-right"],
+[data-canvas-area="true"] [data-resize-handle="bottom-left"] {
+  cursor: nesw-resize !important;
+}
+
 .canvas-area-cursor input,
 .canvas-area-cursor textarea,
 .canvas-area-cursor .cursor-text,

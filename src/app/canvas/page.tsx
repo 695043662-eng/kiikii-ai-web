@@ -8032,6 +8032,7 @@ function CanvasContent({
                 return (
                   <div
                     key={corner}
+                    data-resize-handle={corner}  // 标识为缩放手柄，用于 CSS 光标覆盖
                     onMouseDown={(e) => {
                       e.stopPropagation();
                       e.preventDefault();
@@ -8066,7 +8067,8 @@ function CanvasContent({
                       height: 20,
                       backgroundColor: 'red',  // 临时调试
                       cursor: corner.includes('left') && corner.includes('top') || corner.includes('right') && corner.includes('bottom') ? 'nwse-resize' : 'nesw-resize',
-                      zIndex: 30  // 提高到更高的层级
+                      pointerEvents: 'auto',  // 关键：允许鼠标事件
+                      zIndex: 9999  // 测试：提高到最高层级
                     }}
                   />
                 );

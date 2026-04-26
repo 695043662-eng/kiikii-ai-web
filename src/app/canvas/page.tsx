@@ -8003,16 +8003,16 @@ function CanvasContent({
                   width: screenW,
                   height: screenH,
                   border: isGroup ? '2px dashed #8b5cf6' : '2px solid #40A9FF',
-                  borderRadius: el.type === 'rectangle' ? 4 : 0,
+                  borderRadius: 8,  // #299 优化：添加四角圆角
                   pointerEvents: 'none',
                   zIndex: 20
                 }}
               />
               
-              {/* 四角缩放手柄 - 固定大小（组元素不显示缩放手柄） */}
+              {/* #299 优化：移除四角圆点，改用透明悬停区域显示鼠标样式 */}
               {!isGroup && ['top-left', 'top-right', 'bottom-left', 'bottom-right'].map((corner) => {
-                const handleX = corner.includes('left') ? screenX - 5 : corner.includes('right') ? screenX + screenW - 5 : 0;
-                const handleY = corner.includes('top') ? screenY - 5 : corner.includes('bottom') ? screenY + screenH - 5 : 0;
+                const handleX = corner.includes('left') ? screenX : corner.includes('right') ? screenX + screenW - 20 : 0;
+                const handleY = corner.includes('top') ? screenY : corner.includes('bottom') ? screenY + screenH - 20 : 0;
                 
                 // 形状工具栏锁定宽高比优先
                 let lockAspectRatio: number | undefined;
@@ -8066,11 +8066,9 @@ function CanvasContent({
                       position: 'absolute',
                       left: handleX,
                       top: handleY,
-                      width: 10,
-                      height: 10,
-                      backgroundColor: '#fff',
-                      border: '2px solid #40A9FF',
-                      borderRadius: '50%',
+                      width: 20,  // 透明触发区域大小
+                      height: 20,
+                      borderRadius: '50%',  // 圆形触发区域
                       cursor: corner.includes('left') && corner.includes('top') || corner.includes('right') && corner.includes('bottom') ? 'nwse-resize' : 'nesw-resize',
                       zIndex: 21
                     }}

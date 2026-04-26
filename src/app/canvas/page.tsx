@@ -4120,11 +4120,14 @@ function CanvasContent({
       maxY = Math.max(maxY, el.y + el.height);
     });
     
+    // #299 优化：增加留白间距，确保边框与内容不重叠
+    const PADDING = 10;
+    
     return {
-      x: minX,
-      y: minY,
-      width: maxX - minX,
-      height: maxY - minY,
+      x: minX - PADDING,
+      y: minY - PADDING,
+      width: (maxX - minX) + PADDING * 2,
+      height: (maxY - minY) + PADDING * 2,
     };
   }, [canvas.state.selectedIds, canvas.state.elements]);
   
@@ -7975,6 +7978,10 @@ function CanvasContent({
           // 文字元素由 Fabric.js 处理，这里不显示选中边框
           if (el.type === 'text') return null;
           
+          // #299 优化：多选时隐藏单个元素的边框和控制点（由大框架统一显示）
+          const isMultiSelect = canvas.state.selectedIds.length > 1;
+          if (isMultiSelect) return null;
+          
           // 计算屏幕坐标
           const screenX = el.x * zoom + pan.x;
           const screenY = el.y * zoom + pan.y;
@@ -8073,8 +8080,8 @@ function CanvasContent({
           );
         })}
         
-        {/* #299 新增：选中框整体缩放 - 仅在多选时显示 */}
-        {isMounted && selectionBox && canvas.state.selectedIds.length >= 1 && !isCropping && !isSelectionResizing && (
+        {/* #299 新增：选中框整体缩放 - 多选时显示大框架，单选时由元素边框处理 */}
+        {isMounted && selectionBox && canvas.state.selectedIds.length > 1 && !isCropping && !isSelectionResizing && (
           <div
             style={{
               position: 'absolute',
@@ -8082,7 +8089,7 @@ function CanvasContent({
               top: selectionBox.y * zoom + pan.y,
               width: selectionBox.width * zoom,
               height: selectionBox.height * zoom,
-              border: '2px solid #40A9FF',
+              border: '2px dashed #888',  // 浅灰色虚线
               borderRadius: 4,
               pointerEvents: 'none',
               zIndex: 25,
@@ -8104,7 +8111,7 @@ function CanvasContent({
                     width: 10,
                     height: 10,
                     background: '#fff',
-                    border: '2px solid #40A9FF',
+                    border: '2px solid #888',  // 与边框同色
                     borderRadius: 2,
                     cursor: `${corner}-resize`,
                     pointerEvents: 'auto',

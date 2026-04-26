@@ -297,20 +297,25 @@ export function AIGeneratorProvider({ children }: { children: React.ReactNode })
   // ========== 用户信息刷新函数 ==========
   const refreshUserInfo = useCallback(async (forceRefresh = false) => {
     try {
+      console.log('[AIGeneratorContext] #301 refreshUserInfo 开始, forceRefresh:', forceRefresh);
+      
       // #301 如果是强制刷新（如违规计数更新），先清除缓存
       if (forceRefresh) {
         clearCachedUser();
+        console.log('[AIGeneratorContext] #301 已清除缓存，准备重新获取');
       }
       
       // 🔒 军规：fetchUserWithCache 内部已处理首次刷新逻辑
       const userInfo = await fetchUserWithCache();
+      console.log('[AIGeneratorContext] #301 fetchUserWithCache 返回:', userInfo ? `userId=${userInfo.id}, failedAttempts=${userInfo.failed_attempts}` : 'null');
+      
       if (userInfo) {
         setCredits(userInfo.credits || 0);
         setUserId(userInfo.id || null);
         userIdRef.current = userInfo.id || null;  // #232 修复：同步更新 ref
         setIsLoggedIn(true);
         setFailedAttempts(userInfo.failed_attempts || 0);  // #301 设置违规计数
-        console.log('[AIGeneratorContext] 用户信息刷新成功, userId:', userInfo.id, 'failedAttempts:', userInfo.failed_attempts);
+        console.log('[AIGeneratorContext] #301 setFailedAttempts 被调用, 值:', userInfo.failed_attempts || 0);
         return userInfo;
       } else {
         setCredits(0);
@@ -318,11 +323,11 @@ export function AIGeneratorProvider({ children }: { children: React.ReactNode })
         userIdRef.current = null;  // #232 修复：同步更新 ref
         setIsLoggedIn(false);
         setFailedAttempts(0);  // #301 重置违规计数
-        console.log('[AIGeneratorContext] 用户信息刷新失败, userId 为 null');
+        console.log('[AIGeneratorContext] #301 用户信息为空，重置 failedAttempts 为 0');
         return null;
       }
     } catch (error) {
-      console.error('刷新用户信息失败:', error);
+      console.error('[AIGeneratorContext] #301 刷新用户信息失败:', error);
       return null;
     }
   }, [setCredits, setUserId, setIsLoggedIn]);

@@ -214,20 +214,19 @@ const RightPanel: React.FC<RightPanelProps> = (props) => {
   
   // 第5次违规弹窗状态
   const [showViolationWarning, setShowViolationWarning] = React.useState(false);
-  const [lastTriggeredCount, setLastTriggeredCount] = React.useState(0);  // #301 记录上次触发的计数
   
-  // 监听 failedAttempts 变化，第5次时弹出警告
-  // #301 修复：使用 lastTriggeredCount 防止重复弹窗，同时确保在恰好在第5次时触发
-  React.useEffect(() => {
-    console.log('[RightPanel] #301 failedAttempts 变化:', failedAttempts, 'lastTriggeredCount:', lastTriggeredCount);
-    
-    // 恰好第5次，且之前没有触发过
-    if (failedAttempts >= 5 && lastTriggeredCount < 5) {
-      console.log('[RightPanel] #301 触发违规警告弹窗');
-      setShowViolationWarning(true);
-      setLastTriggeredCount(failedAttempts);
-    }
-  }, [failedAttempts, lastTriggeredCount]);
+  console.log('[RightPanel] #301 当前 failedAttempts:', failedAttempts);
+  
+  // #301 直接在渲染时检查是否需要弹窗（不依赖 useEffect）
+  // 使用 ref 防止重复弹窗
+  const hasShownWarningRef = React.useRef(false);
+  
+  if (failedAttempts >= 5 && !hasShownWarningRef.current && !showViolationWarning) {
+    console.log('[RightPanel] #301 检测到违规次数 >= 5，触发弹窗');
+    hasShownWarningRef.current = true;
+    // 使用 setTimeout 确保在渲染完成后设置状态
+    setTimeout(() => setShowViolationWarning(true), 0);
+  }
   
   // 解构所有 props，确保变量名与原代码 100% 一致
   const {

@@ -4122,7 +4122,7 @@ function CanvasContent({
     
     // #299 优化：增加留白间距，确保边框与内容不重叠
     // 注意：这是画布坐标，会被 zoom 缩放显示
-    const PADDING = 20;
+    const PADDING = 30;  // 增大间距
     
     return {
       x: minX - PADDING,
@@ -8091,7 +8091,7 @@ function CanvasContent({
               width: selectionBox.width * zoom,
               height: selectionBox.height * zoom,
               border: '2px dashed #888',  // 浅灰色虚线
-              borderRadius: 4,
+              borderRadius: 10 * zoom,  // 四角圆角，跟随缩放
               pointerEvents: 'none',
               zIndex: 25,
             }}

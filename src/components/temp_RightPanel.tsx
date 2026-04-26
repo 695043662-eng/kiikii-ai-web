@@ -1688,9 +1688,9 @@ const RightPanel: React.FC<RightPanelProps> = (props) => {
               </svg>
               违规警告
             </DialogTitle>
-            <DialogDescription className="text-muted-foreground pt-2">
-              您已累计提交 5 次违规任务。<br />
-              恶意提交违规任务 10 次，恶意提交积分返还一半。
+            <DialogDescription className="text-foreground pt-2">
+              您已连续提交 5 次违规任务。<br />
+              连续恶意提交违规任务 10 次，恶意提交积分返还一半。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="sm:justify-center">

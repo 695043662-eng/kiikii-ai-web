@@ -8001,8 +8001,8 @@ function CanvasContent({
                   top: screenY,
                   width: screenW,
                   height: screenH,
-                  border: isGroup ? '2px dashed #8b5cf6' : '2px solid #40A9FF',
-                  borderRadius: 8,
+                  border: isGroup ? '2px dashed #8b5cf6' : '2px solid #888',
+                  borderRadius: isGroup ? 8 : 0,
                   pointerEvents: 'none',
                   zIndex: 20
                 }}

@@ -4653,8 +4653,8 @@ function CanvasContent({
       }
 
       // 调整大小时的磁吸逻辑
-      const SNAP_THRESHOLD_SCREEN = 5; // 5像素磁吸
-      const SNAP_THRESHOLD = SNAP_THRESHOLD_SCREEN / zoomRef.current;
+      const SNAP_THRESHOLD_SCREEN = 5; // 5像素磁吸（与拖动一致）
+      const SNAP_THRESHOLD = SNAP_THRESHOLD_SCREEN / zoom;
       const newAlignLines: { horizontal: { y: number; x1: number; x2: number }[]; vertical: { x: number; y1: number; y2: number }[] } = { horizontal: [], vertical: [] };
       
       const otherElements = canvas.state.elements.filter(e => e.id !== resizing.id && e.visible);
@@ -4666,6 +4666,8 @@ function CanvasContent({
       
       let snapX: number | null = null;
       let snapY: number | null = null;
+      let snapXDist = Infinity;  // 记录最近的X对齐距离
+      let snapYDist = Infinity;  // 记录最近的Y对齐距离
       
       // 右边磁吸
       if (resizing.corner.includes('right')) {
@@ -4674,16 +4676,22 @@ function CanvasContent({
           const otherRight = other.x + other.width;
           const otherCenterX = other.x + other.width / 2;
           
-          if (Math.abs(elRight - otherLeft) < SNAP_THRESHOLD) {
-            snapX = otherLeft; // 右边界对齐到otherLeft
+          // 右边对齐到其他元素左边
+          if (Math.abs(elRight - otherLeft) < SNAP_THRESHOLD && Math.abs(elRight - otherLeft) < snapXDist) {
+            snapX = otherLeft;
+            snapXDist = Math.abs(elRight - otherLeft);
             newAlignLines.vertical.push({ x: otherLeft, y1: Math.min(newY, other.y), y2: Math.max(elBottom, other.y + other.height) });
           }
-          if (Math.abs(elRight - otherRight) < SNAP_THRESHOLD) {
-            snapX = otherRight; // 右边界对齐到otherRight
+          // 右边对齐到其他元素右边
+          if (Math.abs(elRight - otherRight) < SNAP_THRESHOLD && Math.abs(elRight - otherRight) < snapXDist) {
+            snapX = otherRight;
+            snapXDist = Math.abs(elRight - otherRight);
             newAlignLines.vertical.push({ x: otherRight, y1: Math.min(newY, other.y), y2: Math.max(elBottom, other.y + other.height) });
           }
-          if (Math.abs(elCenterX - otherCenterX) < SNAP_THRESHOLD) {
-            snapX = otherCenterX + newW / 2; // 中心对齐，计算对应的右边界位置
+          // 中心对齐
+          if (Math.abs(elCenterX - otherCenterX) < SNAP_THRESHOLD && Math.abs(elCenterX - otherCenterX) < snapXDist) {
+            snapX = otherCenterX + newW / 2;
+            snapXDist = Math.abs(elCenterX - otherCenterX);
             newAlignLines.vertical.push({ x: otherCenterX, y1: Math.min(newY, other.y), y2: Math.max(elBottom, other.y + other.height) });
           }
         }
@@ -4696,16 +4704,22 @@ function CanvasContent({
           const otherRight = other.x + other.width;
           const otherCenterX = other.x + other.width / 2;
           
-          if (Math.abs(newX - otherLeft) < SNAP_THRESHOLD) {
+          // 左边对齐到其他元素左边
+          if (Math.abs(newX - otherLeft) < SNAP_THRESHOLD && Math.abs(newX - otherLeft) < snapXDist) {
             snapX = otherLeft;
+            snapXDist = Math.abs(newX - otherLeft);
             newAlignLines.vertical.push({ x: otherLeft, y1: Math.min(newY, other.y), y2: Math.max(elBottom, other.y + other.height) });
           }
-          if (Math.abs(newX - otherRight) < SNAP_THRESHOLD) {
+          // 左边对齐到其他元素右边
+          if (Math.abs(newX - otherRight) < SNAP_THRESHOLD && Math.abs(newX - otherRight) < snapXDist) {
             snapX = otherRight;
+            snapXDist = Math.abs(newX - otherRight);
             newAlignLines.vertical.push({ x: otherRight, y1: Math.min(newY, other.y), y2: Math.max(elBottom, other.y + other.height) });
           }
-          if (Math.abs(newX + newW/2 - otherCenterX) < SNAP_THRESHOLD) {
+          // 中心对齐
+          if (Math.abs(newX + newW/2 - otherCenterX) < SNAP_THRESHOLD && Math.abs(newX + newW/2 - otherCenterX) < snapXDist) {
             snapX = otherCenterX - newW / 2;
+            snapXDist = Math.abs(newX + newW/2 - otherCenterX);
             newAlignLines.vertical.push({ x: otherCenterX, y1: Math.min(newY, other.y), y2: Math.max(elBottom, other.y + other.height) });
           }
         }
@@ -4718,16 +4732,22 @@ function CanvasContent({
           const otherBottom = other.y + other.height;
           const otherCenterY = other.y + other.height / 2;
           
-          if (Math.abs(elBottom - otherTop) < SNAP_THRESHOLD) {
-            snapY = otherTop; // 底边界对齐到otherTop
+          // 底边对齐到其他元素顶边
+          if (Math.abs(elBottom - otherTop) < SNAP_THRESHOLD && Math.abs(elBottom - otherTop) < snapYDist) {
+            snapY = otherTop;
+            snapYDist = Math.abs(elBottom - otherTop);
             newAlignLines.horizontal.push({ y: otherTop, x1: Math.min(newX, other.x), x2: Math.max(elRight, other.x + other.width) });
           }
-          if (Math.abs(elBottom - otherBottom) < SNAP_THRESHOLD) {
-            snapY = otherBottom; // 底边界对齐到otherBottom
+          // 底边对齐到其他元素底边
+          if (Math.abs(elBottom - otherBottom) < SNAP_THRESHOLD && Math.abs(elBottom - otherBottom) < snapYDist) {
+            snapY = otherBottom;
+            snapYDist = Math.abs(elBottom - otherBottom);
             newAlignLines.horizontal.push({ y: otherBottom, x1: Math.min(newX, other.x), x2: Math.max(elRight, other.x + other.width) });
           }
-          if (Math.abs(elCenterY - otherCenterY) < SNAP_THRESHOLD) {
-            snapY = otherCenterY + newH / 2; // 中心对齐，计算对应的底边界位置
+          // 中心对齐
+          if (Math.abs(elCenterY - otherCenterY) < SNAP_THRESHOLD && Math.abs(elCenterY - otherCenterY) < snapYDist) {
+            snapY = otherCenterY + newH / 2;
+            snapYDist = Math.abs(elCenterY - otherCenterY);
             newAlignLines.horizontal.push({ y: otherCenterY, x1: Math.min(newX, other.x), x2: Math.max(elRight, other.x + other.width) });
           }
         }
@@ -4740,16 +4760,22 @@ function CanvasContent({
           const otherBottom = other.y + other.height;
           const otherCenterY = other.y + other.height / 2;
           
-          if (Math.abs(newY - otherTop) < SNAP_THRESHOLD) {
+          // 顶边对齐到其他元素顶边
+          if (Math.abs(newY - otherTop) < SNAP_THRESHOLD && Math.abs(newY - otherTop) < snapYDist) {
             snapY = otherTop;
+            snapYDist = Math.abs(newY - otherTop);
             newAlignLines.horizontal.push({ y: otherTop, x1: Math.min(newX, other.x), x2: Math.max(elRight, other.x + other.width) });
           }
-          if (Math.abs(newY - otherBottom) < SNAP_THRESHOLD) {
+          // 顶边对齐到其他元素底边
+          if (Math.abs(newY - otherBottom) < SNAP_THRESHOLD && Math.abs(newY - otherBottom) < snapYDist) {
             snapY = otherBottom;
+            snapYDist = Math.abs(newY - otherBottom);
             newAlignLines.horizontal.push({ y: otherBottom, x1: Math.min(newX, other.x), x2: Math.max(elRight, other.x + other.width) });
           }
-          if (Math.abs(newY + newH/2 - otherCenterY) < SNAP_THRESHOLD) {
+          // 中心对齐
+          if (Math.abs(newY + newH/2 - otherCenterY) < SNAP_THRESHOLD && Math.abs(newY + newH/2 - otherCenterY) < snapYDist) {
             snapY = otherCenterY - newH / 2;
+            snapYDist = Math.abs(newY + newH/2 - otherCenterY);
             newAlignLines.horizontal.push({ y: otherCenterY, x1: Math.min(newX, other.x), x2: Math.max(elRight, other.x + other.width) });
           }
         }

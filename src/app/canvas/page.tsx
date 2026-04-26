@@ -8011,8 +8011,8 @@ function CanvasContent({
               
               {/* #299 优化：移除四角圆点，改用透明悬停区域显示鼠标样式 */}
               {!isGroup && ['top-left', 'top-right', 'bottom-left', 'bottom-right'].map((corner) => {
-                const handleX = corner.includes('left') ? screenX : corner.includes('right') ? screenX + screenW - 20 : 0;
-                const handleY = corner.includes('top') ? screenY : corner.includes('bottom') ? screenY + screenH - 20 : 0;
+                const handleX = corner.includes('left') ? screenX - 10 : corner.includes('right') ? screenX + screenW - 10 : 0;
+                const handleY = corner.includes('top') ? screenY - 10 : corner.includes('bottom') ? screenY + screenH - 10 : 0;
                 
                 // 形状工具栏锁定宽高比优先
                 let lockAspectRatio: number | undefined;
@@ -8068,8 +8068,8 @@ function CanvasContent({
                       top: handleY,
                       width: 20,  // 透明触发区域大小
                       height: 20,
-                      borderRadius: '50%',  // 圆形触发区域
                       cursor: corner.includes('left') && corner.includes('top') || corner.includes('right') && corner.includes('bottom') ? 'nwse-resize' : 'nesw-resize',
+                      pointerEvents: 'auto',  // #299 修复：允许鼠标事件
                       zIndex: 21
                     }}
                   />

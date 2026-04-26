@@ -242,6 +242,7 @@ exec_sql({ sql: "SELECT * FROM users" })
 | #297 | 数据库配置被错误覆盖 | 全量恢复api_configs和api_models，新增gpt-image-2 | ✅ 已修复 | 核心必读 |
 | #298 | 聊天容器参考图缩略图显示坏图 | handleSend等待上传完成再捕获chatImageKeys | ✅ 已修复 | 核心必读 |
 | #299 | 选中框整体缩放功能 | updateElementsBatch批量更新+等比例缩放+画布坐标转换 | ✅ 已修复 | 画布核心 |
+| #301 | 违规弹窗不触发 | useEffect监听failedAttempts+ref一次性锁死防重复 | ✅ 已修复 | 核心必读 |
 
 ---
 
@@ -5846,6 +5847,81 @@ let finalScale = (scaleX > 1 || scaleY > 1)
 3. 拖动角落控制点
 4. 确认所有选中元素等比例缩放
 5. 缩放画布后再操作，确认坐标正确
+
+---
+
+### 状态
+✅ 已修复
+
+## #301 违规弹窗不触发 - useEffect监听+一次性锁死（CRITICAL）⚠️ 必读
+
+**发现日期**：2026-04-27
+**修复日期**：2026-04-27
+
+### 问题描述
+
+用户违规达到18次，后端计数正常，API返回正确，但前端弹窗从未触发。
+
+### 问题排查
+
+**后端一切正常**：
+- 违规计数正确增加（用户已达 17-18 次）
+- API 返回正确的 `failed_attempts` 值
+- SSE 事件正确发送
+
+**前端问题定位**：
+
+原代码（`temp_RightPanel.tsx` 第220-229行）：
+```javascript
+const hasShownWarningRef = React.useRef(false);
+
+if (failedAttempts >= 5 && !hasShownWarningRef.current && !showViolationWarning) {
+  console.log('[RightPanel] #301 检测到违规次数 >= 5，触发弹窗');
+  hasShownWarningRef.current = true;
+  setTimeout(() => setShowViolationWarning(true), 0);
+}
+```
+
+**问题根因**：
+1. **渲染期间设置 ref 不规范**：React 可能会在某些情况下重新执行渲染逻辑
+2. **初始值问题**：页面首次加载时 `failedAttempts` 可能是 0 或旧缓存值
+3. **竞态条件**：`setTimeout` 是异步的，在状态更新前 ref 可能已被多次设置
+
+### 修复方案
+
+**方案B：使用 useEffect 监听 + ref 一次性锁死**
+
+```javascript
+// #301 违规警告弹窗：只在 failedAttempts >= 5 时触发一次
+const hasShownWarningRef = React.useRef(false);
+
+React.useEffect(() => {
+  // 已弹过或未达标，跳过
+  if (hasShownWarningRef.current || failedAttempts < 5) return;
+  
+  console.log(`[RightPanel] #301 违规检测触发弹窗，当前次数: ${failedAttempts}`);
+  hasShownWarningRef.current = true;  // 一次性锁死，防止重复弹窗
+  setShowViolationWarning(true);
+}, [failedAttempts]);  // 只监听 failedAttempts，与弹窗状态解绑
+```
+
+**方案优势**：
+1. **响应式**：当 `failedAttempts` 变化时自动触发
+2. **合规副作用**：ref 更新在 useEffect 内部，符合 React 规范
+3. **一次性锁死**：防止用户关闭弹窗后重复弹出
+4. **依赖极简**：只监听 `failedAttempts`，与弹窗状态解绑
+
+### 修改文件
+
+- `src/components/temp_RightPanel.tsx` - 删除渲染期间的 ref 检查，改用 useEffect 监听
+
+### 验证方法
+
+1. 在画布页面使用违规提示词生图
+2. 确认违规计数增加（后端日志）
+3. 当违规次数达到 5 次时，弹窗应弹出
+4. 关闭弹窗后，弹窗不应再次弹出
+5. 刷新页面，弹窗不应再次弹出（已锁死）
 
 ---
 

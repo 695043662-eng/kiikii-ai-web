@@ -7206,9 +7206,8 @@ function CanvasContent({
           )}
           
           {/* ========== #军师方案：磁吸感应区 Handle 按钮 ========== */}
-          {/* 巨大的透明感应区 + 弹性动画视觉点，实现真正的"磁吸"质感 */}
-          {/* 仅在非裁剪模式、非生成中状态显示 */}
-          {!isThisCropping && !isGenerating && !isLoading && !isFailed && !isExpired && (
+          {/* TODO: 连线功能开发中，暂时隐藏按钮 */}
+          {false && !isThisCropping && !isGenerating && !isLoading && !isFailed && !isExpired && (
             <div
               style={{
                 position: 'absolute',

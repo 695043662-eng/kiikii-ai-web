@@ -7287,28 +7287,30 @@ function CanvasContent({
                     transition: 'transform 0.08s ease-out', // 更快的响应
                   }}
                 >
-                  {/* 3. 内层：scale 动画和视觉样式 - 透明底、黑边、黑加号 */}
+                  {/* 3. 内层：scale 动画和视觉样式 - 透明底、黑边/白边（主题适配） */}
                   <div
                     style={{
                       width: 43,
                       height: 43,
                       background: hoveredElementIdRef.current === el.id 
-                        ? 'linear-gradient(135deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.05) 100%)' 
+                        ? (theme === 'dark' 
+                            ? 'linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.05) 100%)' 
+                            : 'linear-gradient(135deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.05) 100%)')
                         : 'transparent',
-                      border: '2px solid rgba(0,0,0,0.7)',
+                      border: theme === 'dark' ? '2px solid rgba(255,255,255,0.7)' : '2px solid rgba(0,0,0,0.7)',
                       borderRadius: '50%',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       boxShadow: hoveredElementIdRef.current === el.id 
-                        ? '0 2px 8px rgba(0,0,0,0.2)' 
-                        : '0 1px 3px rgba(0,0,0,0.15)',
+                        ? (theme === 'dark' ? '0 2px 8px rgba(255,255,255,0.15)' : '0 2px 8px rgba(0,0,0,0.2)') 
+                        : (theme === 'dark' ? '0 1px 3px rgba(255,255,255,0.1)' : '0 1px 3px rgba(0,0,0,0.15)'),
                       transform: hoveredElementIdRef.current === el.id ? 'scale(1.1)' : 'scale(0.5)',
                       transition: 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)', // Q弹动画
                       pointerEvents: 'none',
                     }}
                   >
-                    <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="rgba(0,0,0,0.8)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke={theme === 'dark' ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.8)'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 5v14M5 12h14"/>
                     </svg>
                   </div>

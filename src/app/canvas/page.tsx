@@ -4029,6 +4029,10 @@ function CanvasContent({
   // SPA 无缝跳转
   const router = useRouter();
   
+  // 右侧 Handle 按钮的 hover 状态（使用 ref + state 配合）
+  const hoveredElementIdRef = useRef<string | null>(null);
+  const [, forceUpdateForHover] = useState(0);
+  
   // #096 修复：SSR Hydration 撕裂 - 使用 isMounted 状态锁
   // 带有 transform 动态坐标的 DOM 节点，只在客户端挂载后才渲染
   const [isMounted, setIsMounted] = useState(false);
@@ -6298,7 +6302,7 @@ function CanvasContent({
     }
   }, [canvas.state.tool]);
 
-  const renderElement = (el: CanvasElement, index: number) => {
+  const renderElement = (el: CanvasElement, index: number): React.ReactNode => {
     if (!el.visible) return null;
     const isSelected = canvas.state.selectedIds.includes(el.id);
     // zIndex: 始终基于数组索引，选中时在原有基础上加一个较大的值确保在最上层
@@ -6634,6 +6638,14 @@ function CanvasContent({
               e.stopPropagation();
               onGridImageSelect(el.imageUrl);
             }
+          }}
+          onMouseEnter={() => {
+            hoveredElementIdRef.current = el.id;
+            forceUpdateForHover(n => n + 1);
+          }}
+          onMouseLeave={() => {
+            hoveredElementIdRef.current = null;
+            forceUpdateForHover(n => n + 1);
           }}
         >
           {/* 生成中占位符 - 玫瑰曲线动画 + 渐变背景 */}
@@ -7141,7 +7153,7 @@ function CanvasContent({
           {/* 右侧连线 Handle 按钮 - 悬浮显示 */}
           {/* 仅在非裁剪模式、非生成中状态显示 */}
           {/* #军师方案A+：按钮和图片容器平级，外层 overflow:visible */}
-          {/* 测试：暂时去掉 opacity-0，确认按钮能正常显示 */}
+          {/* 使用 React state 控制 hover 显示（Tailwind group-hover 在 v4 中不稳定） */}
           {!isThisCropping && !isGenerating && !isLoading && !isFailed && !isExpired && (
             <div
               className="absolute flex items-center justify-center transition-opacity duration-200 z-50 cursor-crosshair"
@@ -7151,7 +7163,7 @@ function CanvasContent({
                 transform: 'translateY(-50%)',
                 width: '40px',
                 height: '40px',
-                backgroundColor: 'rgba(255, 0, 0, 0.3)', // 测试：红色背景，更容易看到
+                opacity: hoveredElementIdRef.current === el.id ? 1 : 0,
               }}
               onMouseDown={(e) => {
                 e.stopPropagation(); // 阻止事件冒泡，防止触发图片的拖拽

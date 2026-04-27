@@ -5946,12 +5946,36 @@ function CanvasContent({
         return canvasX >= el.x && canvasX <= el.x + el.width && 
                canvasY >= el.y && canvasY <= el.y + el.height;
       }
-      // 普通元素：检查点击是否在元素边界内
+      // 图片元素：扩展检测范围到右侧加号按钮区域（和 hover 检测一致）
+      if (el.type === 'image') {
+        const isInImage = canvasX >= el.x && canvasX <= el.x + el.width &&
+                          canvasY >= el.y && canvasY <= el.y + el.height;
+        // 检查是否在磁吸范围内（按钮中心 100px 半径圆形区域）
+        const btnCenterX = el.x + el.width + 44;
+        const btnCenterY = el.y + el.height / 2;
+        const distX = canvasX - btnCenterX;
+        const distY = canvasY - btnCenterY;
+        const distance = Math.sqrt(distX * distX + distY * distY);
+        const isInMagnetRange = distance < 100;
+        return isInImage || isInMagnetRange;
+      }
+      // 其他元素：检查点击是否在元素边界内
       return canvasX >= el.x && canvasX <= el.x + el.width && 
              canvasY >= el.y && canvasY <= el.y + el.height;
     });
     
     if (clickedEl) {
+      // #军师方案：如果点击的是图片的磁吸范围（不是图片本身），让加号按钮接管
+      if (clickedEl.type === 'image') {
+        const isInImage = canvasX >= clickedEl.x && canvasX <= clickedEl.x + clickedEl.width &&
+                          canvasY >= clickedEl.y && canvasY <= clickedEl.y + clickedEl.height;
+        if (!isInImage) {
+          // 点击的是磁吸范围（加号按钮区域），让加号按钮的事件处理器接管
+          // 不执行任何画布操作，直接返回
+          return;
+        }
+      }
+      
       // 双击选择模式下，点击图片元素由图片元素自己处理（拖动和双击）
       if (isGridSelectMode && clickedEl.type === 'image') {
         return;
@@ -6085,6 +6109,11 @@ function CanvasContent({
       const distY = canvasY - btnCenterY;
       const distance = Math.sqrt(distX * distX + distY * distY);
       const isInMagnetRange = distance < 100;
+      
+      // 调试日志
+      if (isInImage || isInMagnetRange) {
+        console.log('[Hover检测] 触发图片:', el.id, 'isInImage:', isInImage, 'isInMagnetRange:', isInMagnetRange, 'distance:', Math.round(distance));
+      }
       
       // 图片内 OR 磁吸范围内才触发
       return isInImage || isInMagnetRange;

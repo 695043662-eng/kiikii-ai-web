@@ -7137,6 +7137,65 @@ function CanvasContent({
               />
             </>
           )}
+          
+          {/* 右侧连线 Handle 按钮 - 悬浮显示 */}
+          {/* 仅在非裁剪模式、非生成中状态显示 */}
+          {/* 使用嵌套 group 实现扩大悬浮区域效果 */}
+          {!isThisCropping && !isGenerating && !isLoading && !isFailed && !isExpired && (
+            <div
+              className="group/trigger absolute z-50"
+              style={{
+                right: '-20px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                width: '40px',
+                height: '40px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              {/* 实际的 + 号按钮 - 默认透明，悬浮时显示 */}
+              {/* 使用 group-hover/trigger 实现扩大区域的悬浮效果 */}
+              <div
+                className="opacity-0 group-hover/trigger:opacity-100 transition-opacity duration-200"
+                style={{
+                  width: '24px',
+                  height: '24px',
+                  borderRadius: '50%',
+                  backgroundColor: '#1f2937',
+                  border: '2px solid #fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                }}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  console.log('[连线Handle] + 号按钮被点击，元素ID:', el.id);
+                  // TODO: 触发连线逻辑
+                }}
+              >
+                {/* + 号图标 */}
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 14 14"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M7 0V14M0 7H14"
+                    stroke="white"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </div>
+            </div>
+          )}
         </div>
       );
     }

@@ -6041,6 +6041,27 @@ function CanvasContent({
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     
+    // #军师方案：全局坐标计算 hover 状态
+    // 因为元素层 pointerEvents: none，无法接收原生鼠标事件
+    // 必须在主容器通过坐标计算判断鼠标是否在某个图片边界内
+    const canvasX = (x - pan.x) / zoom;
+    const canvasY = (y - pan.y) / zoom;
+    
+    // 查找鼠标所在位置的图片元素（从上往下找，最上面的元素优先）
+    const hoveredEl = [...canvas.state.elements].reverse().find(el => {
+      if (el.type !== 'image' || !el.visible) return false;
+      // 检查是否在图片边界内
+      return canvasX >= el.x && canvasX <= el.x + el.width &&
+             canvasY >= el.y && canvasY <= el.y + el.height;
+    });
+    
+    // 更新 hover 状态
+    const newHoveredId = hoveredEl?.id || null;
+    if (hoveredElementIdRef.current !== newHoveredId) {
+      hoveredElementIdRef.current = newHoveredId;
+      forceUpdateForHover(n => n + 1);
+    }
+    
     // 画布拖拽（空格+左键 或 手型工具）
     if (isPanning) {
       const dx = e.clientX - panStart.x;
@@ -6082,10 +6103,6 @@ function CanvasContent({
       return;
     }
     
-    // 转换为画布坐标
-    const canvasX = (x - pan.x) / zoom;
-    const canvasY = (y - pan.y) / zoom;
-
     // 裁剪框拖拽由全局事件监听器处理
 
     // 画笔绘制
@@ -6320,6 +6337,12 @@ function CanvasContent({
 
   // 鼠标离开
   const handleMouseLeave = useCallback(() => {
+    // 清除 hover 状态
+    if (hoveredElementIdRef.current !== null) {
+      hoveredElementIdRef.current = null;
+      forceUpdateForHover(n => n + 1);
+    }
+    
     // 如果正在拖动元素或框选，不要中断操作
     // 因为鼠标可能快速移动导致短暂离开容器边界
     if (isDragging || isSelecting) {
@@ -6678,14 +6701,6 @@ function CanvasContent({
               e.stopPropagation();
               onGridImageSelect(el.imageUrl);
             }
-          }}
-          onMouseEnter={() => {
-            hoveredElementIdRef.current = el.id;
-            forceUpdateForHover(n => n + 1);
-          }}
-          onMouseLeave={() => {
-            hoveredElementIdRef.current = null;
-            forceUpdateForHover(n => n + 1);
           }}
         >
           {/* 生成中占位符 - 玫瑰曲线动画 + 渐变背景 */}

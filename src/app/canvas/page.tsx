@@ -7140,57 +7140,43 @@ function CanvasContent({
           
           {/* 右侧连线 Handle 按钮 - 悬浮显示 */}
           {/* 仅在非裁剪模式、非生成中状态显示 */}
-          {/* 父容器已有 group 类名，使用 group-hover 触发显示 */}
+          {/* #军师方案A+：按钮和图片容器平级，外层 overflow:visible */}
+          {/* 测试：暂时去掉 opacity-0，确认按钮能正常显示 */}
           {!isThisCropping && !isGenerating && !isLoading && !isFailed && !isExpired && (
             <div
-              className="absolute z-50"
+              className="absolute flex items-center justify-center transition-opacity duration-200 z-50 cursor-crosshair"
               style={{
                 right: '-20px',
                 top: '50%',
                 transform: 'translateY(-50%)',
                 width: '40px',
                 height: '40px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
+                backgroundColor: 'rgba(255, 0, 0, 0.3)', // 测试：红色背景，更容易看到
+              }}
+              onMouseDown={(e) => {
+                e.stopPropagation(); // 阻止事件冒泡，防止触发图片的拖拽
+                e.preventDefault();
+                console.log('[连线Handle] + 号按钮被点击，元素ID:', el.id);
+                // TODO: 触发连线逻辑
               }}
             >
-              {/* 实际的 + 号按钮 - 默认透明，悬浮时显示 */}
-              <div
-                className="opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+              {/* 视觉上的加号按钮 (只负责好看，不接收事件) */}
+              <div 
+                className="pointer-events-none"
                 style={{
-                  width: '24px',
-                  height: '24px',
-                  borderRadius: '50%',
+                  width: '20px',
+                  height: '20px',
                   backgroundColor: '#1f2937',
-                  border: '2px solid #fff',
+                  border: '1px solid #fff',
+                  borderRadius: '50%',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  cursor: 'pointer',
                   boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
                 }}
-                onMouseDown={(e) => {
-                  e.stopPropagation();
-                  e.preventDefault();
-                  console.log('[连线Handle] + 号按钮被点击，元素ID:', el.id);
-                  // TODO: 触发连线逻辑
-                }}
               >
-                {/* + 号图标 */}
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 14 14"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M7 0V14M0 7H14"
-                    stroke="white"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                  />
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 5v14M5 12h14" />
                 </svg>
               </div>
             </div>

@@ -6050,9 +6050,10 @@ function CanvasContent({
     // 查找鼠标所在位置的图片元素（从上往下找，最上面的元素优先）
     const hoveredEl = [...canvas.state.elements].reverse().find(el => {
       if (el.type !== 'image' || !el.visible) return false;
-      // 检查是否在图片边界内 + 右侧按钮扩展区域（60px）
-      // 右侧扩展区域：right: '-30px', width: '60px' → 向右延伸 30px
-      return canvasX >= el.x && canvasX <= el.x + el.width + 30 &&
+      // 检查是否在图片边界内 + 右侧按钮扩展区域
+      // 按钮位置：calc(100% + 15px)，按钮宽度 32px → 向右延伸约 50px
+      // 扩展到 60px 确保鼠标穿过间隙时 hover 状态不断裂
+      return canvasX >= el.x && canvasX <= el.x + el.width + 60 &&
              canvasY >= el.y && canvasY <= el.y + el.height;
     });
     
@@ -7209,59 +7210,56 @@ function CanvasContent({
           {/* ========== #军师方案：磁吸感应区 Handle 按钮 ========== */}
           {/* 鼠标 hover 图片时显示右侧连线按钮 */}
           {!isThisCropping && !isGenerating && !isLoading && !isFailed && !isExpired && (
-            <div
-              style={{
-                position: 'absolute',
-                right: '-30px',       // 向外延伸
-                top: '50%',
-                transform: 'translateY(-50%)',
-                width: '60px',        // 巨大的横向感应区
-                height: '80px',       // 巨大的纵向感应区
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 100,
-                cursor: 'crosshair',
-                // 没有 hover 时关掉感应区，防止挡住其他元素
-                pointerEvents: hoveredElementIdRef.current === el.id ? 'auto' : 'none',
-              }}
-              onMouseDown={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                console.log('[连线Handle] 准备拉出流光连线！元素ID:', el.id);
-                // TODO: 触发连线逻辑
-              }}
-            >
-              {/* 视觉层：带弹性动画的"伪磁吸"按钮 */}
+            <>
+              {/* 👑 外层容器：绝对只负责定位和事件，死死钉在图片右侧外部！ */}
               <div
                 style={{
-                  width: 24,
-                  height: 24,
-                  // 磁吸视觉反馈：悬浮时变成亮蓝色
-                  background: hoveredElementIdRef.current === el.id ? '#3B82F6' : '#1f2937',
-                  border: '2px solid white',
-                  borderRadius: '50%',
+                  position: 'absolute',
+                  left: 'calc(100% + 15px)', // 关键：100%是图片右边缘，再往外推15px的悬浮间距
+                  top: '50%',
+                  transform: 'translateY(-50%)', // 垂直居中
+                  width: '32px',
+                  height: '32px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  // 磁吸发光反馈
-                  boxShadow: hoveredElementIdRef.current === el.id 
-                    ? '0 0 12px rgba(59,130,246,0.8)' 
-                    : '0 2px 4px rgba(0,0,0,0.2)',
-                  // 只有 hover 该节点时才显示
+                  cursor: 'crosshair',
                   opacity: hoveredElementIdRef.current === el.id ? 1 : 0,
-                  // 磁吸弹性跳出动画：从缩小状态瞬间弹大
-                  transform: hoveredElementIdRef.current === el.id ? 'scale(1.1)' : 'scale(0.5)',
-                  // 贝塞尔曲线过渡，产生"Q弹"的物理吸附质感
-                  transition: 'all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-                  pointerEvents: 'none', // 视觉层坚决不拦截事件
+                  pointerEvents: hoveredElementIdRef.current === el.id ? 'auto' : 'none',
+                  zIndex: 100,
+                }}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  console.log('[连线Handle] 触发连线！元素ID:', el.id);
+                  // TODO: 触发连线逻辑
                 }}
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 5v14M5 12h14"/>
-                </svg>
+                {/* 👑 内层视觉：只负责颜色和缩放动画，绝对不碰 translateY */}
+                <div
+                  style={{
+                    width: 24,
+                    height: 24,
+                    background: hoveredElementIdRef.current === el.id ? '#3B82F6' : '#1f2937',
+                    border: '2px solid white',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: hoveredElementIdRef.current === el.id 
+                      ? '0 0 12px rgba(59,130,246,0.8)' 
+                      : '0 2px 4px rgba(0,0,0,0.3)',
+                    transform: hoveredElementIdRef.current === el.id ? 'scale(1.1)' : 'scale(0.5)',
+                    transition: 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)', // Q弹动画
+                    pointerEvents: 'none',
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 5v14M5 12h14"/>
+                  </svg>
+                </div>
               </div>
-            </div>
+            </>
           )}
         </div>
       );

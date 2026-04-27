@@ -7140,10 +7140,10 @@ function CanvasContent({
           
           {/* 右侧连线 Handle 按钮 - 悬浮显示 */}
           {/* 仅在非裁剪模式、非生成中状态显示 */}
-          {/* 使用嵌套 group 实现扩大悬浮区域效果 */}
+          {/* 父容器已有 group 类名，使用 group-hover 触发显示 */}
           {!isThisCropping && !isGenerating && !isLoading && !isFailed && !isExpired && (
             <div
-              className="group/trigger absolute z-50"
+              className="absolute z-50"
               style={{
                 right: '-20px',
                 top: '50%',
@@ -7156,9 +7156,8 @@ function CanvasContent({
               }}
             >
               {/* 实际的 + 号按钮 - 默认透明，悬浮时显示 */}
-              {/* 使用 group-hover/trigger 实现扩大区域的悬浮效果 */}
               <div
-                className="opacity-0 group-hover/trigger:opacity-100 transition-opacity duration-200"
+                className="opacity-0 group-hover:opacity-100 transition-opacity duration-200"
                 style={{
                   width: '24px',
                   height: '24px',

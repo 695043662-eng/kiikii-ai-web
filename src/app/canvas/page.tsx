@@ -4033,6 +4033,11 @@ function CanvasContent({
   const hoveredElementIdRef = useRef<string | null>(null);
   const [, forceUpdateForHover] = useState(0);
   
+  // #军师方案：流光连线状态（Bypass React - 零渲染）
+  const draftLineRef = useRef<{ active: boolean; startX: number; startY: number; sourceId: string | null }>({
+    active: false, startX: 0, startY: 0, sourceId: null
+  });
+  
   // #096 修复：SSR Hydration 撕裂 - 使用 isMounted 状态锁
   // 带有 transform 动态坐标的 DOM 节点，只在客户端挂载后才渲染
   const [isMounted, setIsMounted] = useState(false);
@@ -6104,6 +6109,25 @@ function CanvasContent({
       }
     }
     
+    // 👑 流光连线绘制 (Bypass React) - 零渲染拖拽曲线
+    if (draftLineRef.current.active) {
+      const { startX, startY } = draftLineRef.current;
+      // 终点就是当前鼠标映射到画布的坐标 (canvasX, canvasY)
+      const endX = canvasX;
+      const endY = canvasY;
+      
+      // 计算完美的三次贝塞尔曲线路径 (Cubic Bezier)
+      // 控制点偏移量，随着两点距离动态变化，产生柔和的波动感
+      const dx = Math.abs(endX - startX) * 0.5;
+      const path = `M ${startX},${startY} C ${startX + dx},${startY} ${endX - dx},${endY} ${endX},${endY}`;
+      
+      // 原生 DOM 操作，零延迟渲染曲线
+      const basePath = document.getElementById('draft-line-base');
+      const glowPath = document.getElementById('draft-line-glow');
+      if (basePath) basePath.setAttribute('d', path);
+      if (glowPath) glowPath.setAttribute('d', path);
+    }
+    
     // 画布拖拽（空格+左键 或 手型工具）
     if (isPanning) {
       const dx = e.clientX - panStart.x;
@@ -6178,6 +6202,22 @@ function CanvasContent({
 
   // 鼠标松开
   const handleMouseUp = useCallback((e: React.MouseEvent) => {
+    // 👑 流光连线结束
+    if (draftLineRef.current.active) {
+      console.log('[连线Handle] 松开连线，准备唤出菜单！源节点:', draftLineRef.current.sourceId);
+      draftLineRef.current.active = false;
+      
+      const svgLayer = document.getElementById('draft-connection-layer');
+      if (svgLayer) {
+        svgLayer.style.display = 'none';
+        // 清空路径
+        document.getElementById('draft-line-base')?.setAttribute('d', '');
+        document.getElementById('draft-line-glow')?.setAttribute('d', '');
+      }
+      // TODO: 在这里触发第三阶段的"唤出菜单"逻辑
+      return;
+    }
+    
     // 裁剪框拖拽结束
     if (isCropping && cropHandle) {
 
@@ -7271,8 +7311,19 @@ function CanvasContent({
                 onMouseDown={(e) => {
                   e.stopPropagation();
                   e.preventDefault();
-                  console.log('[连线Handle] 触发连线！元素ID:', el.id);
-                  // TODO: 触发连线逻辑
+                  
+                  // 计算当前加号的物理坐标 (基于 el 的坐标推算)
+                  // 按钮中心：图片右边缘 + 15px间距 + 29px(58宽的一半) = +44
+                  const startX = el.x + el.width + 44;
+                  const startY = el.y + el.height / 2;
+                  
+                  draftLineRef.current = { active: true, startX, startY, sourceId: el.id };
+                  
+                  // 显示 SVG 层
+                  const svgLayer = document.getElementById('draft-connection-layer');
+                  if (svgLayer) svgLayer.style.display = 'block';
+                  
+                  console.log('[连线Handle] 开始拖拽连线！源节点:', el.id);
                 }}
               >
                 {/* 2. 中间层：专属 ID，用来被原生 JS 劫持，负责 translate 磁吸偏移 */}
@@ -7771,6 +7822,30 @@ function CanvasContent({
             })()}
           </svg>
         )}
+        
+        {/* 注入流光动画 CSS */}
+        <style>{`
+          @keyframes dashFlow {
+            to { stroke-dashoffset: -20; }
+          }
+          .flow-line {
+            animation: dashFlow 0.5s linear infinite;
+          }
+        `}</style>
+        
+        {/* 专门用于绘制临时拖拽连线的原生 SVG 层 */}
+        <svg 
+          id="draft-connection-layer"
+          style={{ 
+            position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', 
+            pointerEvents: 'none', zIndex: 150, display: 'none' 
+          }}
+        >
+          {/* 底层暗色细线 */}
+          <path id="draft-line-base" fill="none" stroke="#4B5563" strokeWidth="2" />
+          {/* 顶层发光流光线 */}
+          <path id="draft-line-glow" className="flow-line" fill="none" stroke="#3B82F6" strokeWidth="3" strokeDasharray="10 10" style={{ filter: 'drop-shadow(0 0 4px rgba(59,130,246,0.8))' }} />
+        </svg>
         
         {/* 框选矩形 - 固定边框，不受缩放影响 */}
         {isSelecting && selectionRect && (

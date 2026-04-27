@@ -4029,9 +4029,6 @@ function CanvasContent({
   // SPA 无缝跳转
   const router = useRouter();
   
-  // 右侧 Handle 按钮的 hover 状态
-  const [hoveredElementId, setHoveredElementId] = useState<string | null>(null);
-  
   // #096 修复：SSR Hydration 撕裂 - 使用 isMounted 状态锁
   // 带有 transform 动态坐标的 DOM 节点，只在客户端挂载后才渲染
   const [isMounted, setIsMounted] = useState(false);
@@ -4589,13 +4586,31 @@ function CanvasContent({
   }, [isCropping, cropImageId, cropRect, canvas, zoom, pan, CANVAS_WIDTH, canvasHeight]);
 
   // 调整大小处理
+  // #军师方案：图片元素拖拽四个角时默认锁定宽高比
   const handleResizeStart = useCallback((e: React.MouseEvent, id: string, corner: string, keepAspectRatio: boolean = false) => {
     e.stopPropagation();
     e.preventDefault();
     const el = canvas.state.elements.find(el => el.id === id);
     if (!el) return;
-    const aspectRatio = keepAspectRatio ? el.width / el.height : undefined;
-    setResizing({ id, corner, startX: e.clientX, startY: e.clientY, startW: el.width, startH: el.height, startElX: el.x, startElY: el.y, aspectRatio });
+    
+    // 图片元素拖拽四个角（包含 - 符号，如 top-left, bottom-right）时，强制锁定宽高比
+    const isCorner = corner.includes('-');
+    const shouldLockRatio = el.type === 'image' && isCorner;
+    
+    // 计算当前宽高比
+    const aspectRatio = (keepAspectRatio || shouldLockRatio) ? el.width / el.height : undefined;
+    
+    setResizing({ 
+      id, 
+      corner, 
+      startX: e.clientX, 
+      startY: e.clientY, 
+      startW: el.width, 
+      startH: el.height, 
+      startElX: el.x, 
+      startElY: el.y, 
+      aspectRatio 
+    });
   }, [canvas.state.elements]);
 
   // 调整大小中 - 支持角点缩放和磁吸
@@ -6602,7 +6617,7 @@ function CanvasContent({
             userSelect: 'none',
             pointerEvents: 'auto',
           }}
-          className={`group select-none ${isGridSelectMode ? 'cursor-pointer' : cursorClass}`}
+          className={`canvas-image-wrapper group select-none ${isGridSelectMode ? 'cursor-pointer' : cursorClass}`}
           onContextMenu={(e) => handleContextMenu(e, el.id)}
           onMouseDown={(e) => {
             console.log('[图片容器] onMouseDown 触发:', el.id, e.clientX, e.clientY, '裁剪模式:', isThisCropping);
@@ -6638,14 +6653,6 @@ function CanvasContent({
               e.stopPropagation();
               onGridImageSelect(el.imageUrl);
             }
-          }}
-          onMouseEnter={() => {
-            console.log('[hover] 图片容器 onMouseEnter:', el.id);
-            setHoveredElementId(el.id);
-          }}
-          onMouseLeave={() => {
-            console.log('[hover] 图片容器 onMouseLeave:', el.id);
-            setHoveredElementId(null);
           }}
         >
           {/* 生成中占位符 - 玫瑰曲线动画 + 渐变背景 */}
@@ -7150,44 +7157,60 @@ function CanvasContent({
             </>
           )}
           
+          {/* #军师方案：注入局部 CSS，用原生 :hover 解决悬浮魔法 */}
+          <style>{`
+            .canvas-image-wrapper .hover-handle-btn { 
+              opacity: 0; 
+              pointer-events: none; 
+              transition: opacity 0.2s; 
+            }
+            .canvas-image-wrapper:hover .hover-handle-btn { 
+              opacity: 1; 
+              pointer-events: auto; 
+            }
+          `}</style>
+          
           {/* 右侧连线 Handle 按钮 - 悬浮显示 */}
           {/* 仅在非裁剪模式、非生成中状态显示 */}
-          {/* 按钮完全在图片外面：right: -30px 让按钮中心距离图片边缘 10px */}
+          {/* 使用纯 CSS hover，绕过 React 事件系统 */}
           {!isThisCropping && !isGenerating && !isLoading && !isFailed && !isExpired && (
             <div
-              className="absolute flex items-center justify-center transition-opacity duration-200 z-50 cursor-crosshair"
+              className="hover-handle-btn"
               style={{
-                right: '-30px',
+                position: 'absolute',
+                right: '-40px',
                 top: '50%',
                 transform: 'translateY(-50%)',
                 width: '40px',
                 height: '40px',
-                opacity: hoveredElementId === el.id ? 1 : 0,
-                pointerEvents: hoveredElementId === el.id ? 'auto' : 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'crosshair',
+                zIndex: 100,
               }}
-              onMouseEnter={() => setHoveredElementId(el.id)}
               onMouseDown={(e) => {
                 e.stopPropagation();
                 e.preventDefault();
                 console.log('[连线Handle] + 号按钮被点击，元素ID:', el.id);
+                // TODO: 触发连线逻辑
               }}
             >
               {/* 视觉上的加号按钮 */}
               <div 
-                className="pointer-events-none"
                 style={{
-                  width: '24px',
-                  height: '24px',
+                  width: 24,
+                  height: 24,
                   backgroundColor: '#1f2937',
-                  border: '2px solid #fff',
+                  border: '2px solid white',
                   borderRadius: '50%',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
                 }}
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 5v14M5 12h14" />
                 </svg>
               </div>

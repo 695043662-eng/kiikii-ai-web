@@ -7289,7 +7289,7 @@ function CanvasContent({
           {/* 鼠标 hover 图片时显示右侧连线按钮 */}
           {!isThisCropping && !isGenerating && !isLoading && !isFailed && !isExpired && (
             <>
-              {/* 1. 外层：死死钉在 calc(100% + 15px)，绝对不动 */}
+              {/* 1. 外层定位容器 (不再拦截事件，只管位置和显隐) */}
               <div
                 style={{
                   position: 'absolute',
@@ -7301,53 +7301,12 @@ function CanvasContent({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  cursor: 'crosshair',
                   opacity: hoveredElementIdRef.current === el.id ? 1 : 0,
                   pointerEvents: hoveredElementIdRef.current === el.id ? 'auto' : 'none',
                   zIndex: 100,
                 }}
-                onMouseDown={(e) => {
-                  // 👑 彻底暗杀原生与合成事件，防止触发底层多选框和拖拽
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (e.nativeEvent && (e.nativeEvent as any).stopImmediatePropagation) {
-                    (e.nativeEvent as any).stopImmediatePropagation();
-                  }
-                  
-                  // 计算当前加号的物理坐标 (基于 el 的坐标推算)
-                  // 按钮中心：图片右边缘 + 15px间距 + 29px(58宽的一半) = +44
-                  const startX = el.x + el.width + 44;
-                  const startY = el.y + el.height / 2;
-                  
-                  draftLineRef.current = { active: true, startX, startY, sourceId: el.id };
-                  
-                  // 显示 SVG 层
-                  const svgLayer = document.getElementById('draft-connection-layer');
-                  if (svgLayer) svgLayer.style.display = 'block';
-                  
-                  console.log('[连线Handle] ⚡ 连线启动成功！源节点:', el.id);
-                }}
-                onPointerDown={(e) => {
-                  // 👑 升级：同时拦截 Pointer 事件！
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (e.nativeEvent && (e.nativeEvent as any).stopImmediatePropagation) {
-                    (e.nativeEvent as any).stopImmediatePropagation();
-                  }
-                  
-                  // 计算当前加号的物理坐标
-                  const startX = el.x + el.width + 44;
-                  const startY = el.y + el.height / 2;
-                  
-                  draftLineRef.current = { active: true, startX, startY, sourceId: el.id };
-                  
-                  const svgLayer = document.getElementById('draft-connection-layer');
-                  if (svgLayer) svgLayer.style.display = 'block';
-                  
-                  console.log('[连线Handle] ⚡ Pointer 连线启动成功！源节点:', el.id);
-                }}
               >
-                {/* 2. 中间层：专属 ID，用来被原生 JS 劫持，负责 translate 磁吸偏移 */}
+                {/* 2. 中间偏移层 (被 JS 劫持 translate，带着内层跑) */}
                 <div 
                   id={`magnet-btn-${el.id}`} 
                   style={{ 
@@ -7356,10 +7315,10 @@ function CanvasContent({
                     display: 'flex', 
                     alignItems: 'center', 
                     justifyContent: 'center',
-                    transition: 'transform 0.08s ease-out', // 更快的响应
+                    transition: 'transform 0.08s ease-out',
                   }}
                 >
-                  {/* 3. 内层：scale 动画和视觉样式 - 透明底、黑边/白边（主题适配） */}
+                  {/* 👑 3. 核心内层视觉实体：必须是 auto，所有事件绑在这里！ */}
                   <div
                     style={{
                       width: 43,
@@ -7378,11 +7337,55 @@ function CanvasContent({
                         ? (theme === 'dark' ? '0 2px 8px rgba(255,255,255,0.15)' : '0 2px 8px rgba(0,0,0,0.2)') 
                         : (theme === 'dark' ? '0 1px 3px rgba(255,255,255,0.1)' : '0 1px 3px rgba(0,0,0,0.15)'),
                       transform: hoveredElementIdRef.current === el.id ? 'scale(1.1)' : 'scale(0.5)',
-                      transition: 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)', // Q弹动画
-                      pointerEvents: 'none',
+                      transition: 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                      // 👑 绝杀：必须是 auto！给全息投影赋予物理体积！
+                      pointerEvents: 'auto',
+                      cursor: 'crosshair',
+                    }}
+                    // 👑 把所有的拦截和触发事件全部挂在这个实体上！
+                    onMouseDown={(e) => {
+                      // 👑 彻底暗杀原生与合成事件，防止触发底层多选框和拖拽
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (e.nativeEvent && (e.nativeEvent as any).stopImmediatePropagation) {
+                        (e.nativeEvent as any).stopImmediatePropagation();
+                      }
+                      
+                      // 计算当前加号的物理坐标 (基于 el 的坐标推算)
+                      // 按钮中心：图片右边缘 + 15px间距 + 29px(58宽的一半) = +44
+                      const startX = el.x + el.width + 44;
+                      const startY = el.y + el.height / 2;
+                      
+                      draftLineRef.current = { active: true, startX, startY, sourceId: el.id };
+                      
+                      // 显示 SVG 层
+                      const svgLayer = document.getElementById('draft-connection-layer');
+                      if (svgLayer) svgLayer.style.display = 'block';
+                      
+                      console.log('[连线Handle] ⚡ 连线启动成功！源节点:', el.id);
+                    }}
+                    onPointerDown={(e) => {
+                      // 👑 升级：同时拦截 Pointer 事件！
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (e.nativeEvent && (e.nativeEvent as any).stopImmediatePropagation) {
+                        (e.nativeEvent as any).stopImmediatePropagation();
+                      }
+                      
+                      // 计算当前加号的物理坐标
+                      const startX = el.x + el.width + 44;
+                      const startY = el.y + el.height / 2;
+                      
+                      draftLineRef.current = { active: true, startX, startY, sourceId: el.id };
+                      
+                      const svgLayer = document.getElementById('draft-connection-layer');
+                      if (svgLayer) svgLayer.style.display = 'block';
+                      
+                      console.log('[连线Handle] ⚡ Pointer 连线启动成功！源节点:', el.id);
                     }}
                   >
-                    <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke={theme === 'dark' ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.8)'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    {/* SVG 图标保持 none，防止误触导致 event.target 判断错误 */}
+                    <svg style={{ pointerEvents: 'none' }} width="25" height="25" viewBox="0 0 24 24" fill="none" stroke={theme === 'dark' ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.8)'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 5v14M5 12h14"/>
                     </svg>
                   </div>

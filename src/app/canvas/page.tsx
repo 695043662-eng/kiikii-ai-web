@@ -7137,6 +7137,106 @@ function CanvasContent({
               />
             </>
           )}
+          
+          {/* #军师方案一：选中边框焊死在图片内部 - 绝对0分离 */}
+          {/* 单选且非裁剪模式且非拖动时显示 */}
+          {isSelected && !isThisCropping && !isDragging && canvas.state.selectedIds.length === 1 && (
+            <>
+              {/* 选中边框 - 使用相对尺寸，完全同步 */}
+              <div
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  top: 0,
+                  width: '100%',
+                  height: '100%',
+                  border: `${Math.max(1, 2 / zoom)}px solid #888`,
+                  borderRadius: Math.max(0, 12 / zoom),
+                  pointerEvents: 'none',
+                  zIndex: 20
+                }}
+              />
+              
+              {/* 8个控制点 - 大小根据 zoom 反向缩放，保持视觉固定 */}
+              {['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].map(corner => {
+                const handleSize = Math.max(8, 20 / zoom); // 控制点大小反向缩放
+                const halfHandle = handleSize / 2;
+                
+                // 计算控制点位置
+                let handleLeft: number | string = 'auto';
+                let handleRight: number | string = 'auto';
+                let handleTop: number | string = 'auto';
+                let handleBottom: number | string = 'auto';
+                
+                if (corner.includes('w')) handleLeft = -halfHandle;
+                if (corner.includes('e')) handleRight = -halfHandle;
+                if (corner.includes('n')) handleTop = -halfHandle;
+                if (corner.includes('s')) handleBottom = -halfHandle;
+                
+                // 边中点的位置
+                if (corner === 'n') { handleLeft = '50%'; handleTop = -halfHandle; handleRight = 'auto'; }
+                if (corner === 's') { handleLeft = '50%'; handleBottom = -halfHandle; handleRight = 'auto'; }
+                if (corner === 'w') { handleTop = '50%'; handleLeft = -halfHandle; handleBottom = 'auto'; }
+                if (corner === 'e') { handleTop = '50%'; handleRight = -halfHandle; handleBottom = 'auto'; }
+                
+                // 光标样式
+                const cursorMap: Record<string, string> = {
+                  'nw': 'nwse-resize', 'se': 'nwse-resize',
+                  'ne': 'nesw-resize', 'sw': 'nesw-resize',
+                  'n': 'ns-resize', 's': 'ns-resize',
+                  'e': 'ew-resize', 'w': 'ew-resize'
+                };
+                
+                return (
+                  <div
+                    key={corner}
+                    data-resize-handle={corner}
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      
+                      let lockAspectRatio: number | undefined;
+                      if (el.type === 'image') {
+                        const imgEl = el as any;
+                        if (imgEl.isCropped && imgEl.cropWidth && imgEl.cropHeight) {
+                          lockAspectRatio = imgEl.cropWidth / imgEl.cropHeight;
+                        } else {
+                          lockAspectRatio = imgEl.aspectRatio;
+                        }
+                      }
+                      
+                      setResizing({ 
+                        id: el.id, 
+                        corner, 
+                        startX: e.clientX, 
+                        startY: e.clientY, 
+                        startW: el.width || 50, 
+                        startH: el.height || 50, 
+                        startElX: el.x, 
+                        startElY: el.y,
+                        aspectRatio: lockAspectRatio
+                      });
+                    }}
+                    style={{
+                      position: 'absolute',
+                      left: corner === 'n' || corner === 's' ? `calc(50% - ${halfHandle}px)` : handleLeft,
+                      right: handleRight,
+                      top: corner === 'w' || corner === 'e' ? `calc(50% - ${halfHandle}px)` : handleTop,
+                      bottom: handleBottom,
+                      width: handleSize,
+                      height: handleSize,
+                      background: '#fff',
+                      border: `${Math.max(1, 2 / zoom)}px solid #888`,
+                      borderRadius: '50%',
+                      cursor: cursorMap[corner],
+                      pointerEvents: 'auto',
+                      zIndex: 30
+                    }}
+                  />
+                );
+              })}
+            </>
+          )}
         </div>
       );
     }
@@ -7930,6 +8030,7 @@ function CanvasContent({
         
         
         {/* 选中状态覆盖层 - 固定大小，不受缩放影响。拖动时隐藏。裁剪模式下隐藏。双击选择模式下隐藏 */}
+        {/* #军师方案一：图片元素的边框已在 renderElement 内部渲染，这里跳过图片类型 */}
         {!isDragging && !isCropping && !isGridSelectMode && canvas.state.selectedIds.map(id => {
           const el = canvas.state.elements.find(e => e.id === id);
           if (!el || !el.visible) return null;
@@ -7939,6 +8040,9 @@ function CanvasContent({
           
           // 文字元素由 Fabric.js 处理，这里不显示选中边框
           if (el.type === 'text') return null;
+          
+          // #军师方案一：图片元素的边框已在 renderElement 内部渲染，跳过
+          if (el.type === 'image') return null;
           
           // #299 优化：多选时隐藏单个元素的边框和控制点（由大框架统一显示）
           const isMultiSelect = canvas.state.selectedIds.length > 1;

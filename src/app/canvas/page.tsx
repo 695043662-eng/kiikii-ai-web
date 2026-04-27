@@ -4659,12 +4659,6 @@ function CanvasContent({
       
       const otherElements = canvas.state.elements.filter(e => e.id !== resizing.id && e.visible);
       
-      console.log('[缩放磁吸] corner:', resizing.corner, 'zoom:', zoom.toFixed(2), '阈值:', SNAP_THRESHOLD.toFixed(2), '其他元素:', otherElements.length);
-      console.log('[缩放磁吸] 当前元素边界:', { left: newX, right: newX + newW, top: newY, bottom: newY + newH });
-      otherElements.forEach((e, i) => {
-        console.log(`[缩放磁吸] 其他元素${i}:`, { id: e.id.slice(0,8), left: e.x, right: e.x + e.width, top: e.y, bottom: e.y + e.height });
-      });
-      
       const elRight = newX + newW;
       const elBottom = newY + newH;
       const elCenterX = newX + newW / 2;
@@ -4694,12 +4688,12 @@ function CanvasContent({
             snapXDist = Math.abs(elRight - otherRight);
             newAlignLines.vertical.push({ x: otherRight, y1: Math.min(newY, other.y), y2: Math.max(elBottom, other.y + other.height) });
           }
-          // 中心对齐
-          if (Math.abs(elCenterX - otherCenterX) < SNAP_THRESHOLD && Math.abs(elCenterX - otherCenterX) < snapXDist) {
-            snapX = otherCenterX + newW / 2;
-            snapXDist = Math.abs(elCenterX - otherCenterX);
-            newAlignLines.vertical.push({ x: otherCenterX, y1: Math.min(newY, other.y), y2: Math.max(elBottom, other.y + other.height) });
-          }
+          // 中心对齐 - 缩放时禁用（因为 newW 在变化会导致 snapX 不稳定）
+          // if (Math.abs(elCenterX - otherCenterX) < SNAP_THRESHOLD && Math.abs(elCenterX - otherCenterX) < snapXDist) {
+          //   snapX = otherCenterX + newW / 2;
+          //   snapXDist = Math.abs(elCenterX - otherCenterX);
+          //   newAlignLines.vertical.push({ x: otherCenterX, y1: Math.min(newY, other.y), y2: Math.max(elBottom, other.y + other.height) });
+          // }
         }
       }
       
@@ -4722,12 +4716,12 @@ function CanvasContent({
             snapXDist = Math.abs(newX - otherRight);
             newAlignLines.vertical.push({ x: otherRight, y1: Math.min(newY, other.y), y2: Math.max(elBottom, other.y + other.height) });
           }
-          // 中心对齐
-          if (Math.abs(newX + newW/2 - otherCenterX) < SNAP_THRESHOLD && Math.abs(newX + newW/2 - otherCenterX) < snapXDist) {
-            snapX = otherCenterX - newW / 2;
-            snapXDist = Math.abs(newX + newW/2 - otherCenterX);
-            newAlignLines.vertical.push({ x: otherCenterX, y1: Math.min(newY, other.y), y2: Math.max(elBottom, other.y + other.height) });
-          }
+          // 中心对齐 - 缩放时禁用（因为 newW 在变化会导致 snapX 不稳定）
+          // if (Math.abs(newX + newW/2 - otherCenterX) < SNAP_THRESHOLD && Math.abs(newX + newW/2 - otherCenterX) < snapXDist) {
+          //   snapX = otherCenterX - newW / 2;
+          //   snapXDist = Math.abs(newX + newW/2 - otherCenterX);
+          //   newAlignLines.vertical.push({ x: otherCenterX, y1: Math.min(newY, other.y), y2: Math.max(elBottom, other.y + other.height) });
+          // }
         }
       }
       
@@ -4739,36 +4733,28 @@ function CanvasContent({
           const otherCenterY = other.y + other.height / 2;
           
           // 底边对齐到其他元素顶边
-          if (Math.abs(elBottom - otherTop) < SNAP_THRESHOLD) {
-            console.log('[缩放磁吸] 底边→顶边检测: elBottom=', elBottom.toFixed(1), 'otherTop=', otherTop.toFixed(1), '距离=', Math.abs(elBottom - otherTop).toFixed(1), '阈值=', SNAP_THRESHOLD.toFixed(1));
-          }
           if (Math.abs(elBottom - otherTop) < SNAP_THRESHOLD && Math.abs(elBottom - otherTop) < snapYDist) {
             snapY = otherTop;
             snapYDist = Math.abs(elBottom - otherTop);
-            console.log('[缩放磁吸] ★选择 底边→顶边 snapY=', snapY.toFixed(1));
             newAlignLines.horizontal.push({ y: otherTop, x1: Math.min(newX, other.x), x2: Math.max(elRight, other.x + other.width) });
           }
           // 底边对齐到其他元素底边
-          if (Math.abs(elBottom - otherBottom) < SNAP_THRESHOLD) {
-            console.log('[缩放磁吸] 底边→底边检测: elBottom=', elBottom.toFixed(1), 'otherBottom=', otherBottom.toFixed(1), '距离=', Math.abs(elBottom - otherBottom).toFixed(1), '阈值=', SNAP_THRESHOLD.toFixed(1));
-          }
           if (Math.abs(elBottom - otherBottom) < SNAP_THRESHOLD && Math.abs(elBottom - otherBottom) < snapYDist) {
             snapY = otherBottom;
             snapYDist = Math.abs(elBottom - otherBottom);
-            console.log('[缩放磁吸] ★选择 底边→底边 snapY=', snapY.toFixed(1));
             newAlignLines.horizontal.push({ y: otherBottom, x1: Math.min(newX, other.x), x2: Math.max(elRight, other.x + other.width) });
           }
-          // 中心对齐
-          const centerDist = Math.abs(elCenterY - otherCenterY);
-          if (centerDist < SNAP_THRESHOLD) {
-            console.log('[缩放磁吸] 底边→中心检测: centerDist=', centerDist.toFixed(2), 'snapYDist=', snapYDist.toFixed(2));
-          }
-          if (centerDist < SNAP_THRESHOLD && centerDist < snapYDist) {
-            snapY = otherCenterY + newH / 2;
-            snapYDist = centerDist;
-            console.log('[缩放磁吸] ★选择 底边→中心 snapY=', snapY.toFixed(1));
-            newAlignLines.horizontal.push({ y: otherCenterY, x1: Math.min(newX, other.x), x2: Math.max(elRight, other.x + other.width) });
-          }
+          // 中心对齐 - 缩放时禁用（因为 newH 在变化会导致 snapY 不稳定）
+          // const centerDist = Math.abs(elCenterY - otherCenterY);
+          // if (centerDist < SNAP_THRESHOLD) {
+          //   console.log('[缩放磁吸] 底边→中心检测: centerDist=', centerDist.toFixed(2), 'snapYDist=', snapYDist.toFixed(2));
+          // }
+          // if (centerDist < SNAP_THRESHOLD && centerDist < snapYDist) {
+          //   snapY = otherCenterY + newH / 2;
+          //   snapYDist = centerDist;
+          //   console.log('[缩放磁吸] ★选择 底边→中心 snapY=', snapY.toFixed(1));
+          //   newAlignLines.horizontal.push({ y: otherCenterY, x1: Math.min(newX, other.x), x2: Math.max(elRight, other.x + other.width) });
+          // }
         }
       }
       
@@ -4791,18 +4777,17 @@ function CanvasContent({
             snapYDist = Math.abs(newY - otherBottom);
             newAlignLines.horizontal.push({ y: otherBottom, x1: Math.min(newX, other.x), x2: Math.max(elRight, other.x + other.width) });
           }
-          // 中心对齐
-          if (Math.abs(newY + newH/2 - otherCenterY) < SNAP_THRESHOLD && Math.abs(newY + newH/2 - otherCenterY) < snapYDist) {
-            snapY = otherCenterY - newH / 2;
-            snapYDist = Math.abs(newY + newH/2 - otherCenterY);
-            newAlignLines.horizontal.push({ y: otherCenterY, x1: Math.min(newX, other.x), x2: Math.max(elRight, other.x + other.width) });
-          }
+          // 中心对齐 - 缩放时禁用（因为 newH 在变化会导致 snapY 不稳定）
+          // if (Math.abs(newY + newH/2 - otherCenterY) < SNAP_THRESHOLD && Math.abs(newY + newH/2 - otherCenterY) < snapYDist) {
+          //   snapY = otherCenterY - newH / 2;
+          //   snapYDist = Math.abs(newY + newH/2 - otherCenterY);
+          //   newAlignLines.horizontal.push({ y: otherCenterY, x1: Math.min(newX, other.x), x2: Math.max(elRight, other.x + other.width) });
+          // }
         }
       }
       
       // 应用磁吸
       if (snapX !== null) {
-        console.log('[缩放磁吸] 应用X磁吸:', snapX.toFixed(2), 'corner:', resizing.corner);
         if (resizing.corner.includes('left')) {
           // 左边对齐，snapX是新的x坐标
           const oldRight = newX + newW;
@@ -4814,7 +4799,6 @@ function CanvasContent({
         }
       }
       if (snapY !== null) {
-        console.log('[缩放磁吸] 应用Y磁吸:', snapY.toFixed(2), 'corner:', resizing.corner);
         if (resizing.corner.includes('top')) {
           // 顶边对齐，snapY是新的y坐标
           const oldBottom = newY + newH;
@@ -4822,8 +4806,6 @@ function CanvasContent({
           newH = Math.max(50, oldBottom - snapY);
         } else {
           // 底边对齐，snapY是新的底边界位置
-          const calculatedHeight = snapY - newY;
-          console.log('[缩放磁吸] 计算newH:', calculatedHeight.toFixed(2), '= snapY', snapY.toFixed(2), '- newY', newY.toFixed(2));
           newH = Math.max(50, snapY - newY);
         }
       }

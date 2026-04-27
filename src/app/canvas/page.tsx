@@ -4794,11 +4794,12 @@ function CanvasContent({
       }
       
       // 5. 从最终边界计算位置和尺寸
-      // 军师方案：强制抹杀浮点数，绝不允许出现 100.3px 这种尺寸
+      // 注意：不要对 width/height 使用 Math.round，否则会破坏宽高比
+      // 只对位置使用 Math.round，避免浮点数导致的视觉分离
       newX = Math.round(imgLeft);
       newY = Math.round(imgTop);
-      newW = Math.round(imgRight - imgLeft);
-      newH = Math.round(imgBottom - imgTop);
+      newW = imgRight - imgLeft;
+      newH = imgBottom - imgTop;
       
       setAlignLines(newAlignLines);
 
@@ -6638,8 +6639,14 @@ function CanvasContent({
               onGridImageSelect(el.imageUrl);
             }
           }}
-          onMouseEnter={() => setHoveredElementId(el.id)}
-          onMouseLeave={() => setHoveredElementId(null)}
+          onMouseEnter={() => {
+            console.log('[hover] 图片容器 onMouseEnter:', el.id);
+            setHoveredElementId(el.id);
+          }}
+          onMouseLeave={() => {
+            console.log('[hover] 图片容器 onMouseLeave:', el.id);
+            setHoveredElementId(null);
+          }}
         >
           {/* 生成中占位符 - 玫瑰曲线动画 + 渐变背景 */}
           {isGenerating && (
@@ -7145,17 +7152,18 @@ function CanvasContent({
           
           {/* 右侧连线 Handle 按钮 - 悬浮显示 */}
           {/* 仅在非裁剪模式、非生成中状态显示 */}
-          {/* 按钮完全在图片外面：right: -50px 让按钮中心距离图片边缘 30px */}
+          {/* 按钮完全在图片外面：right: -30px 让按钮中心距离图片边缘 10px */}
           {!isThisCropping && !isGenerating && !isLoading && !isFailed && !isExpired && (
             <div
               className="absolute flex items-center justify-center transition-opacity duration-200 z-50 cursor-crosshair"
               style={{
-                right: '-50px',
+                right: '-30px',
                 top: '50%',
                 transform: 'translateY(-50%)',
                 width: '40px',
                 height: '40px',
                 opacity: hoveredElementId === el.id ? 1 : 0,
+                pointerEvents: hoveredElementId === el.id ? 'auto' : 'none',
               }}
               onMouseEnter={() => setHoveredElementId(el.id)}
               onMouseDown={(e) => {

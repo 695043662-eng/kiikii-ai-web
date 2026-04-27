@@ -6051,9 +6051,9 @@ function CanvasContent({
     const hoveredEl = [...canvas.state.elements].reverse().find(el => {
       if (el.type !== 'image' || !el.visible) return false;
       // 检查是否在图片边界内 + 右侧按钮扩展区域
-      // 按钮位置：calc(100% + 15px)，按钮宽度 32px → 向右延伸约 50px
-      // 扩展到 60px 确保鼠标穿过间隙时 hover 状态不断裂
-      return canvasX >= el.x && canvasX <= el.x + el.width + 60 &&
+      // 按钮位置：calc(100% + 15px)，按钮宽度 64px → 向右延伸约 80px
+      // 扩展到 100px 确保鼠标穿过间隙时 hover 状态不断裂
+      return canvasX >= el.x && canvasX <= el.x + el.width + 100 &&
              canvasY >= el.y && canvasY <= el.y + el.height;
     });
     
@@ -6069,8 +6069,8 @@ function CanvasContent({
       const hoveredElement = canvas.state.elements.find(e => e.id === hoveredElementIdRef.current);
       if (hoveredElement) {
         // 计算按钮在画板中的理论中心点坐标
-        // 按钮 X = 图片 X + 图片宽 + 15px间距 + 16px(32宽的一半) = +31
-        const btnCenterX = hoveredElement.x + hoveredElement.width + 31;
+        // 按钮 X = 图片 X + 图片宽 + 15px间距 + 32px(64宽的一半) = +47
+        const btnCenterX = hoveredElement.x + hoveredElement.width + 47;
         const btnCenterY = hoveredElement.y + hoveredElement.height / 2;
 
         // 计算鼠标距离按钮中心的向量
@@ -6080,10 +6080,10 @@ function CanvasContent({
 
         const magnetDom = document.getElementById(`magnet-btn-${hoveredElement.id}`);
         if (magnetDom) {
-          if (distance < 60) {
-            // 核心：在 60px 半径内产生引力。0.3 是弹簧阻尼系数
-            const tx = distX * 0.3;
-            const ty = distY * 0.3;
+          if (distance < 100) {
+            // 核心：在 100px 半径内产生引力。0.8 弹簧阻尼系数（更紧跟随）
+            const tx = distX * 0.8;
+            const ty = distY * 0.8;
             magnetDom.style.transform = `translate(${tx}px, ${ty}px)`;
           } else {
             // 鼠标离开引力圈，弹簧归位
@@ -7247,8 +7247,8 @@ function CanvasContent({
                   left: 'calc(100% + 15px)', // 关键：100%是图片右边缘，再往外推15px的悬浮间距
                   top: '50%',
                   transform: 'translateY(-50%)', // 垂直居中
-                  width: '32px',
-                  height: '32px',
+                  width: '64px',
+                  height: '64px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -7273,29 +7273,29 @@ function CanvasContent({
                     display: 'flex', 
                     alignItems: 'center', 
                     justifyContent: 'center',
-                    transition: 'transform 0.1s ease-out', // 产生丝滑的跟随与回弹阻尼感
+                    transition: 'transform 0.08s ease-out', // 更快的响应
                   }}
                 >
                   {/* 3. 内层：scale 动画和视觉样式 */}
                   <div
                     style={{
-                      width: 24,
-                      height: 24,
+                      width: 48,
+                      height: 48,
                       background: hoveredElementIdRef.current === el.id ? '#3B82F6' : '#1f2937',
-                      border: '2px solid white',
+                      border: '3px solid white',
                       borderRadius: '50%',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       boxShadow: hoveredElementIdRef.current === el.id 
-                        ? '0 0 12px rgba(59,130,246,0.8)' 
+                        ? '0 0 16px rgba(59,130,246,0.8)' 
                         : '0 2px 4px rgba(0,0,0,0.3)',
                       transform: hoveredElementIdRef.current === el.id ? 'scale(1.1)' : 'scale(0.5)',
                       transition: 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)', // Q弹动画
                       pointerEvents: 'none',
                     }}
                   >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 5v14M5 12h14"/>
                     </svg>
                   </div>

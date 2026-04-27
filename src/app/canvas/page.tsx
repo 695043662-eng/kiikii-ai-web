@@ -7344,6 +7344,7 @@ function CanvasContent({
                     }}
                     // 👑 把所有的拦截和触发事件全部挂在这个实体上！
                     onMouseDown={(e) => {
+                      console.log('[加号按钮] onMouseDown 触发！', el.id);
                       // 👑 彻底暗杀原生与合成事件，防止触发底层多选框和拖拽
                       e.preventDefault();
                       e.stopPropagation();

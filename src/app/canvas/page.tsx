@@ -4816,6 +4816,27 @@ function CanvasContent({
       newW = imgRight - imgLeft;
       newH = imgBottom - imgTop;
       
+      // ========== #军师方案：磁吸背刺修复 - 强制等比收尾 ==========
+      // 如果当前元素锁定了比例，在磁吸强制修改了某一边后，必须强行修正另一边！
+      if (resizing.aspectRatio) {
+        // 如果触发了 Y 轴（高度）磁吸，高度被改了，我们要强制修正宽度
+        if (snapY !== null) {
+          newW = newH * resizing.aspectRatio;
+          // 如果拖的是左边，宽度变了，X坐标也要跟着修
+          if (resizing.corner.includes('left')) {
+            newX = Math.round(resizing.startElX + (resizing.startW - newW));
+          }
+        } 
+        // 如果触发了 X 轴（宽度）磁吸，宽度被改了，我们要强制修正高度
+        else if (snapX !== null) {
+          newH = newW / resizing.aspectRatio;
+          // 如果拖的是顶边，高度变了，Y坐标也要跟着修
+          if (resizing.corner.includes('top')) {
+            newY = Math.round(resizing.startElY + (resizing.startH - newH));
+          }
+        }
+      }
+      
       setAlignLines(newAlignLines);
 
       // 如果是文字元素，修改fontSize而不是width/height
@@ -7157,25 +7178,11 @@ function CanvasContent({
             </>
           )}
           
-          {/* #军师方案：注入局部 CSS，用原生 :hover 解决悬浮魔法 */}
-          <style>{`
-            .canvas-image-wrapper .hover-handle-btn { 
-              opacity: 0; 
-              pointer-events: none; 
-              transition: opacity 0.2s; 
-            }
-            .canvas-image-wrapper:hover .hover-handle-btn { 
-              opacity: 1; 
-              pointer-events: auto; 
-            }
-          `}</style>
-          
-          {/* 右侧连线 Handle 按钮 - 悬浮显示 */}
-          {/* 仅在非裁剪模式、非生成中状态显示 */}
-          {/* 使用纯 CSS hover，绕过 React 事件系统 */}
-          {!isThisCropping && !isGenerating && !isLoading && !isFailed && !isExpired && (
+          {/* 右侧连线 Handle 按钮 - 选中时显示 */}
+          {/* #军师方案：用 isSelected 替代 hover，无视所有层级遮挡 */}
+          {/* 仅在非裁剪模式、非生成中状态、已选中时显示 */}
+          {!isThisCropping && !isGenerating && !isLoading && !isFailed && !isExpired && isSelected && (
             <div
-              className="hover-handle-btn"
               style={{
                 position: 'absolute',
                 right: '-40px',
@@ -7188,11 +7195,13 @@ function CanvasContent({
                 justifyContent: 'center',
                 cursor: 'crosshair',
                 zIndex: 100,
+                opacity: 1,
+                transition: 'opacity 0.2s',
               }}
               onMouseDown={(e) => {
                 e.stopPropagation();
                 e.preventDefault();
-                console.log('[连线Handle] + 号按钮被点击，元素ID:', el.id);
+                console.log('[连线Handle] 准备拉出流光连线！元素ID:', el.id);
                 // TODO: 触发连线逻辑
               }}
             >

@@ -7206,8 +7206,8 @@ function CanvasContent({
           )}
           
           {/* ========== #军师方案：磁吸感应区 Handle 按钮 ========== */}
-          {/* TODO: 连线功能开发中，暂时隐藏按钮 */}
-          {false && !isThisCropping && !isGenerating && !isLoading && !isFailed && !isExpired && (
+          {/* 鼠标 hover 图片时显示右侧连线按钮 */}
+          {!isThisCropping && !isGenerating && !isLoading && !isFailed && !isExpired && (
             <div
               style={{
                 position: 'absolute',

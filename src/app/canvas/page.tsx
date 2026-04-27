@@ -4595,199 +4595,203 @@ function CanvasContent({
   }, [canvas.state.elements]);
 
   // 调整大小中 - 支持角点缩放和磁吸
+  // #军师方案：只基于图片边界检测，固定锚点锁定
   useEffect(() => {
     if (!resizing) return;
     const handleMouseMove = (e: MouseEvent) => {
       const el = canvas.state.elements.find(el => el.id === resizing.id);
       if (!el) return;
       
-      // 考虑缩放因子，将屏幕坐标差值转换为画布坐标差值
-      // #048 修复：使用 zoom state 而不是从未更新的 ref
+      // 1. 计算鼠标移动量（画布坐标）
       const currentZoom = zoom;
       const dx = (e.clientX - resizing.startX) / currentZoom;
       const dy = (e.clientY - resizing.startY) / currentZoom;
-      let newW = resizing.startW;
-      let newH = resizing.startH;
-      let newX = resizing.startElX;
-      let newY = resizing.startElY;
-
-      // 先计算鼠标位置期望的新尺寸
-      let mouseW = resizing.startW;
-      let mouseH = resizing.startH;
-      let mouseX = resizing.startElX;
-      let mouseY = resizing.startElY;
+      
+      // 2. 根据拖动的角点，计算图片的四个边界（画布坐标）
+      // 固定锚点：对边的边界不变
+      let imgLeft: number, imgRight: number, imgTop: number, imgBottom: number;
+      let newW: number, newH: number, newX: number, newY: number;
+      
+      // 固定边界（对边锚点）
+      const fixedLeft = resizing.startElX;
+      const fixedRight = resizing.startElX + resizing.startW;
+      const fixedTop = resizing.startElY;
+      const fixedBottom = resizing.startElY + resizing.startH;
       
       if (resizing.corner.includes('right')) {
-        mouseW = Math.max(50, resizing.startW + dx);
+        imgLeft = fixedLeft;
+        imgRight = fixedLeft + Math.max(50, resizing.startW + dx);
+      } else { // left
+        imgRight = fixedRight;
+        imgLeft = fixedRight - Math.max(50, resizing.startW - dx);
       }
-      if (resizing.corner.includes('left')) {
-        mouseW = Math.max(50, resizing.startW - dx);
-        mouseX = resizing.startElX + dx;
-      }
+      
       if (resizing.corner.includes('bottom')) {
-        mouseH = Math.max(50, resizing.startH + dy);
+        imgTop = fixedTop;
+        imgBottom = fixedTop + Math.max(50, resizing.startH + dy);
+      } else { // top
+        imgBottom = fixedBottom;
+        imgTop = fixedBottom - Math.max(50, resizing.startH - dy);
       }
-      if (resizing.corner.includes('top')) {
-        mouseH = Math.max(50, resizing.startH - dy);
-        mouseY = resizing.startElY + dy;
-      }
-
-      // 保持宽高比（如果需要）
+      
+      // 处理宽高比锁定
       if (resizing.aspectRatio) {
         if (resizing.corner === 'top-left') {
-          const ratio = Math.max(mouseW / resizing.startW, mouseH / resizing.startH);
-          mouseW = resizing.startW * ratio;
-          mouseH = mouseW / resizing.aspectRatio;
-          mouseX = resizing.startElX + resizing.startW - mouseW;
-          mouseY = resizing.startElY + resizing.startH - mouseH;
+          const ratio = Math.max((imgRight - imgLeft) / resizing.startW, (imgBottom - imgTop) / resizing.startH);
+          const newWidth = resizing.startW * ratio;
+          const newHeight = newWidth / resizing.aspectRatio;
+          imgLeft = fixedRight - newWidth;
+          imgTop = fixedBottom - newHeight;
         } else if (resizing.corner === 'top-right') {
-          const ratio = Math.max(mouseW / resizing.startW, mouseH / resizing.startH);
-          mouseW = resizing.startW * ratio;
-          mouseH = mouseW / resizing.aspectRatio;
-          mouseY = resizing.startElY + resizing.startH - mouseH;
+          const ratio = Math.max((imgRight - imgLeft) / resizing.startW, (imgBottom - imgTop) / resizing.startH);
+          const newWidth = resizing.startW * ratio;
+          const newHeight = newWidth / resizing.aspectRatio;
+          imgRight = fixedLeft + newWidth;
+          imgTop = fixedBottom - newHeight;
         } else if (resizing.corner === 'bottom-left') {
-          const ratio = Math.max(mouseW / resizing.startW, mouseH / resizing.startH);
-          mouseW = resizing.startW * ratio;
-          mouseH = mouseW / resizing.aspectRatio;
-          mouseX = resizing.startElX + resizing.startW - mouseW;
+          const ratio = Math.max((imgRight - imgLeft) / resizing.startW, (imgBottom - imgTop) / resizing.startH);
+          const newWidth = resizing.startW * ratio;
+          const newHeight = newWidth / resizing.aspectRatio;
+          imgLeft = fixedRight - newWidth;
+          imgBottom = fixedTop + newHeight;
         } else if (resizing.corner === 'bottom-right') {
-          const ratio = Math.max(mouseW / resizing.startW, mouseH / resizing.startH);
-          mouseW = resizing.startW * ratio;
-          mouseH = mouseW / resizing.aspectRatio;
+          const ratio = Math.max((imgRight - imgLeft) / resizing.startW, (imgBottom - imgTop) / resizing.startH);
+          const newWidth = resizing.startW * ratio;
+          const newHeight = newWidth / resizing.aspectRatio;
+          imgRight = fixedLeft + newWidth;
+          imgBottom = fixedTop + newHeight;
         }
       }
 
-      // 调整大小时的磁吸逻辑 - 基于鼠标期望的边界进行检测
+      // 3. 磁吸检测 - 只基于图片边界，不用鼠标位置
       const SNAP_THRESHOLD_SCREEN = 5; // 5像素磁吸（与拖动一致）
-      const SNAP_THRESHOLD = SNAP_THRESHOLD_SCREEN / zoom;
+      const SNAP_THRESHOLD = SNAP_THRESHOLD_SCREEN / currentZoom;
       const newAlignLines: { horizontal: { y: number; x1: number; x2: number }[]; vertical: { x: number; y1: number; y2: number }[] } = { horizontal: [], vertical: [] };
       
       const otherElements = canvas.state.elements.filter(e => e.id !== resizing.id && e.visible);
-      
-      // 基于鼠标期望位置计算边界
-      const elRight = mouseX + mouseW;
-      const elBottom = mouseY + mouseH;
       
       let snapX: number | null = null;
       let snapY: number | null = null;
       let snapXDist = Infinity;
       let snapYDist = Infinity;
       
-      // 右边磁吸
+      // 检测右边磁吸
       if (resizing.corner.includes('right')) {
         for (const other of otherElements) {
           const otherLeft = other.x;
           const otherRight = other.x + other.width;
           
           // 右边对齐到其他元素左边
-          if (Math.abs(elRight - otherLeft) < SNAP_THRESHOLD && Math.abs(elRight - otherLeft) < snapXDist) {
+          const distToLeft = Math.abs(imgRight - otherLeft);
+          if (distToLeft < SNAP_THRESHOLD && distToLeft < snapXDist) {
             snapX = otherLeft;
-            snapXDist = Math.abs(elRight - otherLeft);
-            newAlignLines.vertical.push({ x: otherLeft, y1: Math.min(mouseY, other.y), y2: Math.max(elBottom, other.y + other.height) });
+            snapXDist = distToLeft;
+            newAlignLines.vertical.push({ x: otherLeft, y1: Math.min(imgTop, other.y), y2: Math.max(imgBottom, other.y + other.height) });
           }
           // 右边对齐到其他元素右边
-          if (Math.abs(elRight - otherRight) < SNAP_THRESHOLD && Math.abs(elRight - otherRight) < snapXDist) {
+          const distToRight = Math.abs(imgRight - otherRight);
+          if (distToRight < SNAP_THRESHOLD && distToRight < snapXDist) {
             snapX = otherRight;
-            snapXDist = Math.abs(elRight - otherRight);
-            newAlignLines.vertical.push({ x: otherRight, y1: Math.min(mouseY, other.y), y2: Math.max(elBottom, other.y + other.height) });
+            snapXDist = distToRight;
+            newAlignLines.vertical.push({ x: otherRight, y1: Math.min(imgTop, other.y), y2: Math.max(imgBottom, other.y + other.height) });
           }
         }
       }
       
-      // 左边磁吸
+      // 检测左边磁吸
       if (resizing.corner.includes('left')) {
         for (const other of otherElements) {
           const otherLeft = other.x;
           const otherRight = other.x + other.width;
           
           // 左边对齐到其他元素左边
-          if (Math.abs(mouseX - otherLeft) < SNAP_THRESHOLD && Math.abs(mouseX - otherLeft) < snapXDist) {
+          const distToLeft = Math.abs(imgLeft - otherLeft);
+          if (distToLeft < SNAP_THRESHOLD && distToLeft < snapXDist) {
             snapX = otherLeft;
-            snapXDist = Math.abs(mouseX - otherLeft);
-            newAlignLines.vertical.push({ x: otherLeft, y1: Math.min(mouseY, other.y), y2: Math.max(elBottom, other.y + other.height) });
+            snapXDist = distToLeft;
+            newAlignLines.vertical.push({ x: otherLeft, y1: Math.min(imgTop, other.y), y2: Math.max(imgBottom, other.y + other.height) });
           }
           // 左边对齐到其他元素右边
-          if (Math.abs(mouseX - otherRight) < SNAP_THRESHOLD && Math.abs(mouseX - otherRight) < snapXDist) {
+          const distToRight = Math.abs(imgLeft - otherRight);
+          if (distToRight < SNAP_THRESHOLD && distToRight < snapXDist) {
             snapX = otherRight;
-            snapXDist = Math.abs(mouseX - otherRight);
-            newAlignLines.vertical.push({ x: otherRight, y1: Math.min(mouseY, other.y), y2: Math.max(elBottom, other.y + other.height) });
+            snapXDist = distToRight;
+            newAlignLines.vertical.push({ x: otherRight, y1: Math.min(imgTop, other.y), y2: Math.max(imgBottom, other.y + other.height) });
           }
         }
       }
       
-      // 底边磁吸
+      // 检测底边磁吸
       if (resizing.corner.includes('bottom')) {
         for (const other of otherElements) {
           const otherTop = other.y;
           const otherBottom = other.y + other.height;
           
           // 底边对齐到其他元素顶边
-          const distToTop = Math.abs(elBottom - otherTop);
+          const distToTop = Math.abs(imgBottom - otherTop);
           if (distToTop < SNAP_THRESHOLD && distToTop < snapYDist) {
             snapY = otherTop;
             snapYDist = distToTop;
-            newAlignLines.horizontal.push({ y: otherTop, x1: Math.min(mouseX, other.x), x2: Math.max(elRight, other.x + other.width) });
+            newAlignLines.horizontal.push({ y: otherTop, x1: Math.min(imgLeft, other.x), x2: Math.max(imgRight, other.x + other.width) });
           }
           // 底边对齐到其他元素底边
-          const distToBottom = Math.abs(elBottom - otherBottom);
+          const distToBottom = Math.abs(imgBottom - otherBottom);
           if (distToBottom < SNAP_THRESHOLD && distToBottom < snapYDist) {
             snapY = otherBottom;
             snapYDist = distToBottom;
-            newAlignLines.horizontal.push({ y: otherBottom, x1: Math.min(mouseX, other.x), x2: Math.max(elRight, other.x + other.width) });
+            newAlignLines.horizontal.push({ y: otherBottom, x1: Math.min(imgLeft, other.x), x2: Math.max(imgRight, other.x + other.width) });
           }
         }
       }
       
-      // 顶边磁吸
+      // 检测顶边磁吸
       if (resizing.corner.includes('top')) {
         for (const other of otherElements) {
           const otherTop = other.y;
           const otherBottom = other.y + other.height;
           
           // 顶边对齐到其他元素顶边
-          if (Math.abs(mouseY - otherTop) < SNAP_THRESHOLD && Math.abs(mouseY - otherTop) < snapYDist) {
+          const distToTop = Math.abs(imgTop - otherTop);
+          if (distToTop < SNAP_THRESHOLD && distToTop < snapYDist) {
             snapY = otherTop;
-            snapYDist = Math.abs(mouseY - otherTop);
-            newAlignLines.horizontal.push({ y: otherTop, x1: Math.min(mouseX, other.x), x2: Math.max(elRight, other.x + other.width) });
+            snapYDist = distToTop;
+            newAlignLines.horizontal.push({ y: otherTop, x1: Math.min(imgLeft, other.x), x2: Math.max(imgRight, other.x + other.width) });
           }
           // 顶边对齐到其他元素底边
-          if (Math.abs(mouseY - otherBottom) < SNAP_THRESHOLD && Math.abs(mouseY - otherBottom) < snapYDist) {
+          const distToBottom = Math.abs(imgTop - otherBottom);
+          if (distToBottom < SNAP_THRESHOLD && distToBottom < snapYDist) {
             snapY = otherBottom;
-            snapYDist = Math.abs(mouseY - otherBottom);
-            newAlignLines.horizontal.push({ y: otherBottom, x1: Math.min(mouseX, other.x), x2: Math.max(elRight, other.x + other.width) });
+            snapYDist = distToBottom;
+            newAlignLines.horizontal.push({ y: otherBottom, x1: Math.min(imgLeft, other.x), x2: Math.max(imgRight, other.x + other.width) });
           }
         }
       }
       
-      // 最终确定尺寸：默认使用鼠标期望值
-      newW = mouseW;
-      newH = mouseH;
-      newX = mouseX;
-      newY = mouseY;
-      
-      // 应用磁吸 - 关键：使用起始位置作为固定锚点
+      // 4. 应用磁吸 - 强制锁定边界到吸附线，固定锚点不动
       if (snapX !== null) {
         if (resizing.corner.includes('left')) {
-          // 左边吸附：左边对齐到 snapX，右边固定在起始位置
-          newX = snapX;
-          newW = (resizing.startElX + resizing.startW) - snapX;
+          // 左边吸附：左边跳到 snapX，右边固定
+          imgLeft = snapX;
         } else {
-          // 右边吸附：右边对齐到 snapX，左边固定在起始位置
-          newX = resizing.startElX;
-          newW = snapX - resizing.startElX;
+          // 右边吸附：右边跳到 snapX，左边固定
+          imgRight = snapX;
         }
       }
       if (snapY !== null) {
         if (resizing.corner.includes('top')) {
-          // 顶边吸附：顶边对齐到 snapY，底边固定在起始位置
-          newY = snapY;
-          newH = (resizing.startElY + resizing.startH) - snapY;
+          // 顶边吸附：顶边跳到 snapY，底边固定
+          imgTop = snapY;
         } else {
-          // 底边吸附：底边对齐到 snapY，顶边固定在起始位置
-          newY = resizing.startElY;
-          newH = snapY - resizing.startElY;
+          // 底边吸附：底边跳到 snapY，顶边固定
+          imgBottom = snapY;
         }
       }
+      
+      // 5. 从最终边界计算位置和尺寸
+      newX = imgLeft;
+      newY = imgTop;
+      newW = imgRight - imgLeft;
+      newH = imgBottom - imgTop;
       
       setAlignLines(newAlignLines);
 

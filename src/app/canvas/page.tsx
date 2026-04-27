@@ -4759,9 +4759,14 @@ function CanvasContent({
             newAlignLines.horizontal.push({ y: otherBottom, x1: Math.min(newX, other.x), x2: Math.max(elRight, other.x + other.width) });
           }
           // 中心对齐
-          if (Math.abs(elCenterY - otherCenterY) < SNAP_THRESHOLD && Math.abs(elCenterY - otherCenterY) < snapYDist) {
+          const centerDist = Math.abs(elCenterY - otherCenterY);
+          if (centerDist < SNAP_THRESHOLD) {
+            console.log('[缩放磁吸] 底边→中心检测: centerDist=', centerDist.toFixed(2), 'snapYDist=', snapYDist.toFixed(2));
+          }
+          if (centerDist < SNAP_THRESHOLD && centerDist < snapYDist) {
             snapY = otherCenterY + newH / 2;
-            snapYDist = Math.abs(elCenterY - otherCenterY);
+            snapYDist = centerDist;
+            console.log('[缩放磁吸] ★选择 底边→中心 snapY=', snapY.toFixed(1));
             newAlignLines.horizontal.push({ y: otherCenterY, x1: Math.min(newX, other.x), x2: Math.max(elRight, other.x + other.width) });
           }
         }
@@ -4797,7 +4802,7 @@ function CanvasContent({
       
       // 应用磁吸
       if (snapX !== null) {
-        console.log('[缩放磁吸] 应用X磁吸:', snapX, 'corner:', resizing.corner);
+        console.log('[缩放磁吸] 应用X磁吸:', snapX.toFixed(2), 'corner:', resizing.corner);
         if (resizing.corner.includes('left')) {
           // 左边对齐，snapX是新的x坐标
           const oldRight = newX + newW;
@@ -4809,7 +4814,7 @@ function CanvasContent({
         }
       }
       if (snapY !== null) {
-        console.log('[缩放磁吸] 应用Y磁吸:', snapY, 'corner:', resizing.corner);
+        console.log('[缩放磁吸] 应用Y磁吸:', snapY.toFixed(2), 'corner:', resizing.corner);
         if (resizing.corner.includes('top')) {
           // 顶边对齐，snapY是新的y坐标
           const oldBottom = newY + newH;
@@ -4817,6 +4822,8 @@ function CanvasContent({
           newH = Math.max(50, oldBottom - snapY);
         } else {
           // 底边对齐，snapY是新的底边界位置
+          const calculatedHeight = snapY - newY;
+          console.log('[缩放磁吸] 计算newH:', calculatedHeight.toFixed(2), '= snapY', snapY.toFixed(2), '- newY', newY.toFixed(2));
           newH = Math.max(50, snapY - newY);
         }
       }

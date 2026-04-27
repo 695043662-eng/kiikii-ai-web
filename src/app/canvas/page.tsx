@@ -4029,9 +4029,8 @@ function CanvasContent({
   // SPA 无缝跳转
   const router = useRouter();
   
-  // 右侧 Handle 按钮的 hover 状态（使用 ref + state 配合）
-  const hoveredElementIdRef = useRef<string | null>(null);
-  const [, forceUpdateForHover] = useState(0);
+  // 右侧 Handle 按钮的 hover 状态
+  const [hoveredElementId, setHoveredElementId] = useState<string | null>(null);
   
   // #096 修复：SSR Hydration 撕裂 - 使用 isMounted 状态锁
   // 带有 transform 动态坐标的 DOM 节点，只在客户端挂载后才渲染
@@ -6639,14 +6638,8 @@ function CanvasContent({
               onGridImageSelect(el.imageUrl);
             }
           }}
-          onMouseEnter={() => {
-            hoveredElementIdRef.current = el.id;
-            forceUpdateForHover(n => n + 1);
-          }}
-          onMouseLeave={() => {
-            hoveredElementIdRef.current = null;
-            forceUpdateForHover(n => n + 1);
-          }}
+          onMouseEnter={() => setHoveredElementId(el.id)}
+          onMouseLeave={() => setHoveredElementId(null)}
         >
           {/* 生成中占位符 - 玫瑰曲线动画 + 渐变背景 */}
           {isGenerating && (
@@ -7152,34 +7145,33 @@ function CanvasContent({
           
           {/* 右侧连线 Handle 按钮 - 悬浮显示 */}
           {/* 仅在非裁剪模式、非生成中状态显示 */}
-          {/* #军师方案A+：按钮和图片容器平级，外层 overflow:visible */}
-          {/* 使用 React state 控制 hover 显示（Tailwind group-hover 在 v4 中不稳定） */}
+          {/* 按钮完全在图片外面：right: -50px 让按钮中心距离图片边缘 30px */}
           {!isThisCropping && !isGenerating && !isLoading && !isFailed && !isExpired && (
             <div
               className="absolute flex items-center justify-center transition-opacity duration-200 z-50 cursor-crosshair"
               style={{
-                right: '-20px',
+                right: '-50px',
                 top: '50%',
                 transform: 'translateY(-50%)',
                 width: '40px',
                 height: '40px',
-                opacity: hoveredElementIdRef.current === el.id ? 1 : 0,
+                opacity: hoveredElementId === el.id ? 1 : 0,
               }}
+              onMouseEnter={() => setHoveredElementId(el.id)}
               onMouseDown={(e) => {
-                e.stopPropagation(); // 阻止事件冒泡，防止触发图片的拖拽
+                e.stopPropagation();
                 e.preventDefault();
                 console.log('[连线Handle] + 号按钮被点击，元素ID:', el.id);
-                // TODO: 触发连线逻辑
               }}
             >
-              {/* 视觉上的加号按钮 (只负责好看，不接收事件) */}
+              {/* 视觉上的加号按钮 */}
               <div 
                 className="pointer-events-none"
                 style={{
-                  width: '20px',
-                  height: '20px',
+                  width: '24px',
+                  height: '24px',
                   backgroundColor: '#1f2937',
-                  border: '1px solid #fff',
+                  border: '2px solid #fff',
                   borderRadius: '50%',
                   display: 'flex',
                   alignItems: 'center',
@@ -7187,7 +7179,7 @@ function CanvasContent({
                   boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
                 }}
               >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 5v14M5 12h14" />
                 </svg>
               </div>

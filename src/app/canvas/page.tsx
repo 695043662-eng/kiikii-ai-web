@@ -6050,8 +6050,9 @@ function CanvasContent({
     // 查找鼠标所在位置的图片元素（从上往下找，最上面的元素优先）
     const hoveredEl = [...canvas.state.elements].reverse().find(el => {
       if (el.type !== 'image' || !el.visible) return false;
-      // 检查是否在图片边界内
-      return canvasX >= el.x && canvasX <= el.x + el.width &&
+      // 检查是否在图片边界内 + 右侧按钮扩展区域（60px）
+      // 右侧扩展区域：right: '-30px', width: '60px' → 向右延伸 30px
+      return canvasX >= el.x && canvasX <= el.x + el.width + 30 &&
              canvasY >= el.y && canvasY <= el.y + el.height;
     });
     

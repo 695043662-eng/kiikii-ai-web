@@ -5970,8 +5970,26 @@ function CanvasContent({
         const isInImage = canvasX >= clickedEl.x && canvasX <= clickedEl.x + clickedEl.width &&
                           canvasY >= clickedEl.y && canvasY <= clickedEl.y + clickedEl.height;
         if (!isInImage) {
-          // 点击的是磁吸范围（加号按钮区域），让加号按钮的事件处理器接管
-          // 不执行任何画布操作，直接返回
+          // 👑 军师方案：数学雷达精准命中磁吸感应区，直接启动连线！
+          // 彻底阻止默认行为，暗杀底层多选框
+          e.preventDefault();
+          e.stopPropagation();
+          if (e.nativeEvent && (e.nativeEvent as any).stopImmediatePropagation) {
+            (e.nativeEvent as any).stopImmediatePropagation();
+          }
+          
+          // 计算发光连线的起始物理坐标 (按钮的中心)
+          const startX = clickedEl.x + clickedEl.width + 44;
+          const startY = clickedEl.y + clickedEl.height / 2;
+          
+          // 强行覆写 Ref，激活 SVG 流光层
+          draftLineRef.current = { active: true, startX, startY, sourceId: clickedEl.id };
+          const svgLayer = document.getElementById('draft-connection-layer');
+          if (svgLayer) svgLayer.style.display = 'block';
+          
+          console.log('[连线Handle] ⚡ 数学雷达启动连线！源节点:', clickedEl.id);
+          
+          // 绝杀：直接 return，不执行图片选中和拖拽逻辑
           return;
         }
       }

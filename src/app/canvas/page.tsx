@@ -6052,6 +6052,23 @@ function CanvasContent({
     const canvasX = (x - pan.x) / zoom;
     const canvasY = (y - pan.y) / zoom;
     
+    // 👑 最高优先级：流光连线绘制 (Bypass React) - 零渲染拖拽曲线
+    // 必须在任何 return 之前，画完直接 return，保证 60FPS
+    if (draftLineRef.current.active) {
+      const { startX, startY } = draftLineRef.current;
+      const endX = canvasX;
+      const endY = canvasY;
+      
+      // 计算完美的三次贝塞尔曲线路径 (Cubic Bezier)
+      const dx = Math.abs(endX - startX) * 0.5;
+      const path = `M ${startX},${startY} C ${startX + dx},${startY} ${endX - dx},${endY} ${endX},${endY}`;
+      
+      // 原生 DOM 操作，零延迟渲染曲线
+      document.getElementById('draft-line-base')?.setAttribute('d', path);
+      document.getElementById('draft-line-glow')?.setAttribute('d', path);
+      return; // 👑 画完线直接 return，坚决不执行画布底层的 Hover 等计算
+    }
+    
     // 查找鼠标所在位置的图片元素（从上往下找，最上面的元素优先）
     const hoveredEl = [...canvas.state.elements].reverse().find(el => {
       if (el.type !== 'image' || !el.visible) return false;
@@ -6107,25 +6124,6 @@ function CanvasContent({
           }
         }
       }
-    }
-    
-    // 👑 流光连线绘制 (Bypass React) - 零渲染拖拽曲线
-    if (draftLineRef.current.active) {
-      const { startX, startY } = draftLineRef.current;
-      // 终点就是当前鼠标映射到画布的坐标 (canvasX, canvasY)
-      const endX = canvasX;
-      const endY = canvasY;
-      
-      // 计算完美的三次贝塞尔曲线路径 (Cubic Bezier)
-      // 控制点偏移量，随着两点距离动态变化，产生柔和的波动感
-      const dx = Math.abs(endX - startX) * 0.5;
-      const path = `M ${startX},${startY} C ${startX + dx},${startY} ${endX - dx},${endY} ${endX},${endY}`;
-      
-      // 原生 DOM 操作，零延迟渲染曲线
-      const basePath = document.getElementById('draft-line-base');
-      const glowPath = document.getElementById('draft-line-glow');
-      if (basePath) basePath.setAttribute('d', path);
-      if (glowPath) glowPath.setAttribute('d', path);
     }
     
     // 画布拖拽（空格+左键 或 手型工具）
@@ -7838,7 +7836,8 @@ function CanvasContent({
           id="draft-connection-layer"
           style={{ 
             position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', 
-            pointerEvents: 'none', zIndex: 150, display: 'none' 
+            pointerEvents: 'none', zIndex: 150, display: 'none',
+            overflow: 'visible' // 👑 保证贝塞尔曲线飞出屏幕边缘时也不会被裁掉
           }}
         >
           {/* 底层暗色细线 */}

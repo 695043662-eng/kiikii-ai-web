@@ -4788,6 +4788,7 @@ function CanvasContent({
       
       // 应用磁吸
       if (snapX !== null) {
+        console.log('[缩放磁吸] X吸附:', snapX.toFixed(1));
         if (resizing.corner.includes('left')) {
           // 左边对齐，snapX是新的x坐标
           const oldRight = newX + newW;
@@ -4799,6 +4800,7 @@ function CanvasContent({
         }
       }
       if (snapY !== null) {
+        console.log('[缩放磁吸] Y吸附:', snapY.toFixed(1));
         if (resizing.corner.includes('top')) {
           // 顶边对齐，snapY是新的y坐标
           const oldBottom = newY + newH;

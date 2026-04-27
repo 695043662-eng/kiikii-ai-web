@@ -928,7 +928,7 @@ pnpm run ts-check   # 类型检查（tsc --noEmit）
 **在服务器执行以下命令，一键完成部署：**
 
 ```bash
-cd /www/wwwroot/kiikii-ai-web && git fetch origin && git reset --hard origin/main && npm run build && cp -r public .next/standalone/public && mkdir -p .next/standalone/.next && cp -r .next/static .next/standalone/.next/static && pm2 delete all && pm2 start ecosystem.config.js --env production && pm2 save
+cd /var/www/kiikii && git fetch origin && git reset --hard origin/main && npm run build && cp -r public .next/standalone/public && mkdir -p .next/standalone/.next && cp -r .next/static .next/standalone/.next/static && pm2 delete all && pm2 start ecosystem.config.js --env production && pm2 save
 ```
 
 **命令解释**：

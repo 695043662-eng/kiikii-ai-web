@@ -4029,6 +4029,10 @@ function CanvasContent({
   // SPA 无缝跳转
   const router = useRouter();
   
+  // #军师方案：右侧 Handle 按钮的 hover 状态（ref + forceUpdate 配合）
+  const hoveredElementIdRef = useRef<string | null>(null);
+  const [, forceUpdateForHover] = useState(0);
+  
   // #096 修复：SSR Hydration 撕裂 - 使用 isMounted 状态锁
   // 带有 transform 动态坐标的 DOM 节点，只在客户端挂载后才渲染
   const [isMounted, setIsMounted] = useState(false);
@@ -6675,6 +6679,14 @@ function CanvasContent({
               onGridImageSelect(el.imageUrl);
             }
           }}
+          onMouseEnter={() => {
+            hoveredElementIdRef.current = el.id;
+            forceUpdateForHover(n => n + 1);
+          }}
+          onMouseLeave={() => {
+            hoveredElementIdRef.current = null;
+            forceUpdateForHover(n => n + 1);
+          }}
         >
           {/* 生成中占位符 - 玫瑰曲线动画 + 渐变背景 */}
           {isGenerating && (
@@ -7178,25 +7190,25 @@ function CanvasContent({
             </>
           )}
           
-          {/* 右侧连线 Handle 按钮 - 选中时显示 */}
-          {/* #军师方案：用 isSelected 替代 hover，无视所有层级遮挡 */}
-          {/* 仅在非裁剪模式、非生成中状态、已选中时显示 */}
-          {!isThisCropping && !isGenerating && !isLoading && !isFailed && !isExpired && isSelected && (
+          {/* ========== #军师方案：磁吸感应区 Handle 按钮 ========== */}
+          {/* 巨大的透明感应区 + 弹性动画视觉点，实现真正的"磁吸"质感 */}
+          {/* 仅在非裁剪模式、非生成中状态显示 */}
+          {!isThisCropping && !isGenerating && !isLoading && !isFailed && !isExpired && (
             <div
               style={{
                 position: 'absolute',
-                right: '-40px',
+                right: '-30px',       // 向外延伸
                 top: '50%',
                 transform: 'translateY(-50%)',
-                width: '40px',
-                height: '40px',
+                width: '60px',        // 巨大的横向感应区
+                height: '80px',       // 巨大的纵向感应区
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                cursor: 'crosshair',
                 zIndex: 100,
-                opacity: 1,
-                transition: 'opacity 0.2s',
+                cursor: 'crosshair',
+                // 没有 hover 时关掉感应区，防止挡住其他元素
+                pointerEvents: hoveredElementIdRef.current === el.id ? 'auto' : 'none',
               }}
               onMouseDown={(e) => {
                 e.stopPropagation();
@@ -7205,22 +7217,33 @@ function CanvasContent({
                 // TODO: 触发连线逻辑
               }}
             >
-              {/* 视觉上的加号按钮 */}
-              <div 
+              {/* 视觉层：带弹性动画的"伪磁吸"按钮 */}
+              <div
                 style={{
                   width: 24,
                   height: 24,
-                  backgroundColor: '#1f2937',
+                  // 磁吸视觉反馈：悬浮时变成亮蓝色
+                  background: hoveredElementIdRef.current === el.id ? '#3B82F6' : '#1f2937',
                   border: '2px solid white',
                   borderRadius: '50%',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                  // 磁吸发光反馈
+                  boxShadow: hoveredElementIdRef.current === el.id 
+                    ? '0 0 12px rgba(59,130,246,0.8)' 
+                    : '0 2px 4px rgba(0,0,0,0.2)',
+                  // 只有 hover 该节点时才显示
+                  opacity: hoveredElementIdRef.current === el.id ? 1 : 0,
+                  // 磁吸弹性跳出动画：从缩小状态瞬间弹大
+                  transform: hoveredElementIdRef.current === el.id ? 'scale(1.1)' : 'scale(0.5)',
+                  // 贝塞尔曲线过渡，产生"Q弹"的物理吸附质感
+                  transition: 'all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                  pointerEvents: 'none', // 视觉层坚决不拦截事件
                 }}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 5v14M5 12h14" />
+                  <path d="M12 5v14M5 12h14"/>
                 </svg>
               </div>
             </div>

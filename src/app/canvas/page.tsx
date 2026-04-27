@@ -4730,31 +4730,23 @@ function CanvasContent({
         for (const other of otherElements) {
           const otherTop = other.y;
           const otherBottom = other.y + other.height;
-          const otherCenterY = other.y + other.height / 2;
           
           // 底边对齐到其他元素顶边
-          if (Math.abs(elBottom - otherTop) < SNAP_THRESHOLD && Math.abs(elBottom - otherTop) < snapYDist) {
+          const distToTop = Math.abs(elBottom - otherTop);
+          if (distToTop < SNAP_THRESHOLD && distToTop < snapYDist) {
             snapY = otherTop;
-            snapYDist = Math.abs(elBottom - otherTop);
+            snapYDist = distToTop;
+            console.log('[缩放磁吸] 底边→顶边 snapY=', snapY.toFixed(1), '距离=', distToTop.toFixed(1));
             newAlignLines.horizontal.push({ y: otherTop, x1: Math.min(newX, other.x), x2: Math.max(elRight, other.x + other.width) });
           }
           // 底边对齐到其他元素底边
-          if (Math.abs(elBottom - otherBottom) < SNAP_THRESHOLD && Math.abs(elBottom - otherBottom) < snapYDist) {
+          const distToBottom = Math.abs(elBottom - otherBottom);
+          if (distToBottom < SNAP_THRESHOLD && distToBottom < snapYDist) {
             snapY = otherBottom;
-            snapYDist = Math.abs(elBottom - otherBottom);
+            snapYDist = distToBottom;
+            console.log('[缩放磁吸] 底边→底边 snapY=', snapY.toFixed(1), '距离=', distToBottom.toFixed(1));
             newAlignLines.horizontal.push({ y: otherBottom, x1: Math.min(newX, other.x), x2: Math.max(elRight, other.x + other.width) });
           }
-          // 中心对齐 - 缩放时禁用（因为 newH 在变化会导致 snapY 不稳定）
-          // const centerDist = Math.abs(elCenterY - otherCenterY);
-          // if (centerDist < SNAP_THRESHOLD) {
-          //   console.log('[缩放磁吸] 底边→中心检测: centerDist=', centerDist.toFixed(2), 'snapYDist=', snapYDist.toFixed(2));
-          // }
-          // if (centerDist < SNAP_THRESHOLD && centerDist < snapYDist) {
-          //   snapY = otherCenterY + newH / 2;
-          //   snapYDist = centerDist;
-          //   console.log('[缩放磁吸] ★选择 底边→中心 snapY=', snapY.toFixed(1));
-          //   newAlignLines.horizontal.push({ y: otherCenterY, x1: Math.min(newX, other.x), x2: Math.max(elRight, other.x + other.width) });
-          // }
         }
       }
       
@@ -4786,29 +4778,27 @@ function CanvasContent({
         }
       }
       
-      // 应用磁吸
+      // 应用磁吸 - 强制对齐到吸附线，产生"锁定"效果
       if (snapX !== null) {
         console.log('[缩放磁吸] X吸附:', snapX.toFixed(1));
         if (resizing.corner.includes('left')) {
-          // 左边对齐，snapX是新的x坐标
-          const oldRight = newX + newW;
+          // 左边吸附：强制左边对齐到 snapX
           newX = snapX;
-          newW = Math.max(50, oldRight - snapX);
         } else {
-          // 右边对齐，snapX是新的右边界位置
-          newW = Math.max(50, snapX - newX);
+          // 右边吸附：强制右边对齐到 snapX
+          // snapX 是右边的目标位置，newX 不变，调整 newW
+          newW = snapX - newX;
         }
       }
       if (snapY !== null) {
         console.log('[缩放磁吸] Y吸附:', snapY.toFixed(1));
         if (resizing.corner.includes('top')) {
-          // 顶边对齐，snapY是新的y坐标
-          const oldBottom = newY + newH;
+          // 顶边吸附：强制顶边对齐到 snapY
           newY = snapY;
-          newH = Math.max(50, oldBottom - snapY);
         } else {
-          // 底边对齐，snapY是新的底边界位置
-          newH = Math.max(50, snapY - newY);
+          // 底边吸附：强制底边对齐到 snapY
+          // snapY 是底边的目标位置，newY 不变，调整 newH
+          newH = snapY - newY;
         }
       }
       

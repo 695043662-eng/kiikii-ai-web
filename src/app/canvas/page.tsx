@@ -4820,13 +4820,10 @@ function CanvasContent({
             lockedX: e.clientX,
             lockedY: e.clientY
           };
-          console.log('[缩放磁吸] 🔒 新锁定:', { snapX, snapY });
         }
       }
           
       // 4. 应用磁吸 - 强制锁定边界到吸附线，固定锚点不动
-      const beforeSnap = { imgLeft, imgRight, imgTop, imgBottom };
-      
       if (snapX !== null) {
         if (resizing.corner.includes('left')) {
           // 左边吸附：左边跳到 snapX，右边固定
@@ -4844,18 +4841,6 @@ function CanvasContent({
           // 底边吸附：底边跳到 snapY，顶边固定
           imgBottom = snapY;
         }
-      }
-      
-      // 调试：打印吸附前后的变化
-      if (snapX !== null || snapY !== null) {
-        console.log('[缩放磁吸] 🔒 吸附锁定:', {
-          corner: resizing.corner,
-          snapX,
-          snapY,
-          before: { left: Math.round(beforeSnap.imgLeft), right: Math.round(beforeSnap.imgRight), top: Math.round(beforeSnap.imgTop), bottom: Math.round(beforeSnap.imgBottom) },
-          after: { left: Math.round(imgLeft), right: Math.round(imgRight), top: Math.round(imgTop), bottom: Math.round(imgBottom) },
-          newSize: { w: Math.round(imgRight - imgLeft), h: Math.round(imgBottom - imgTop) }
-        });
       }
       
       // 5. 从最终边界计算位置和尺寸

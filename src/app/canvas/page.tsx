@@ -4791,10 +4791,11 @@ function CanvasContent({
       }
       
       // 5. 从最终边界计算位置和尺寸
-      newX = imgLeft;
-      newY = imgTop;
-      newW = imgRight - imgLeft;
-      newH = imgBottom - imgTop;
+      // 军师方案：强制抹杀浮点数，绝不允许出现 100.3px 这种尺寸
+      newX = Math.round(imgLeft);
+      newY = Math.round(imgTop);
+      newW = Math.round(imgRight - imgLeft);
+      newH = Math.round(imgBottom - imgTop);
       
       setAlignLines(newAlignLines);
 
@@ -5079,16 +5080,21 @@ function CanvasContent({
           
           // 更新所有组元素，保持相对位置
           groupStartPositions.forEach((pos: { id: string; x: number; y: number }) => {
-            canvas.updateElement(pos.id, { 
-              x: pos.x + finalOffsetX,
-              y: pos.y + finalOffsetY
+            flushSync(() => {
+              canvas.updateElement(pos.id, { 
+                x: Math.round(pos.x + finalOffsetX),
+                y: Math.round(pos.y + finalOffsetY)
+              });
             });
           });
         } else {
           // 单选拖动：限制元素不能拖出画布边界
           newX = Math.max(0, Math.min(CANVAS_WIDTH - el.width, newX));
           newY = Math.max(0, Math.min(canvasHeight - el.height, newY));
-          canvas.updateElement(dragElement, { x: newX, y: newY });
+          // 军师方案：强制抹杀浮点数 + 同步渲染
+          flushSync(() => {
+            canvas.updateElement(dragElement, { x: Math.round(newX), y: Math.round(newY) });
+          });
         }
       }
     };

@@ -243,6 +243,7 @@ exec_sql({ sql: "SELECT * FROM users" })
 | #298 | 聊天容器参考图缩略图显示坏图 | handleSend等待上传完成再捕获chatImageKeys | ✅ 已修复 | 核心必读 |
 | #299 | 选中框整体缩放功能 | updateElementsBatch批量更新+等比例缩放+画布坐标转换 | ✅ 已修复 | 画布核心 |
 | #301 | 违规弹窗不触发 | useEffect监听failedAttempts+ref一次性锁死防重复 | ✅ 已修复 | 核心必读 |
+| #302 | 生产环境积分显示为0 | credits.ts只读.env.local，与supabase-client.ts一致读取.env.production | ✅ 已修复 | **核心必读** |
 
 ---
 
@@ -3288,6 +3289,93 @@ if (existingMd5s.includes(result.md5)) {
 
 ### 状态
 ✅ 已修复
+
+---
+
+### #302 - 生产环境积分显示为0（CRITICAL）⚠️ 必读
+
+**问题描述**：
+- 用户登录成功，前端显示有 8691 积分
+- 提交生图任务时，后端返回"积分不足（当前: 0, 需要: 10）"
+- `/api/user/info` 能正常返回积分，但 `/api/image-to-image` 积分检查返回 0
+
+**根因分析**：
+
+两个 API 使用了不同的数据库连接方式：
+
+| API | 使用的函数 | 读取配置的方式 |
+|-----|----------|--------------|
+| `/api/user/info` | `getSupabaseClient()` (supabase-client.ts) | ✅ 先读 `.env.production`，再读 `.env.local` |
+| `/api/image-to-image` 积分检查 | `getDbConfig()` (credits.ts) | ❌ **只读 `.env.local`** |
+
+生产环境配置情况：
+- 系统环境变量 `SUPABASE_URL`：空
+- 系统环境变量 `SUPABASE_SERVICE_ROLE_KEY`：空
+- `.env.production` 文件：存在，配置正确
+- `.env.local` 文件：不存在
+
+`credits.ts` 第 34 行只读取 `.env.local`，而 `supabase-client.ts` 第 20-26 行先读 `.env.production`。
+
+**修复方案**：
+
+让 `credits.ts` 与 `supabase-client.ts` 保持一致，先加载 `.env.production`，再加载 `.env.local`：
+
+```typescript
+// #298 解析环境变量文件内容（与 supabase-client.ts 保持一致）
+function parseEnvContent(content: string, result: Record<string, string>): void {
+  const lines = content.split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq > 0) {
+      const key = trimmed.substring(0, eq).trim();
+      let value = trimmed.substring(eq + 1).trim();
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+      // 不覆盖已存在的值（.env.production 优先）
+      if (!result[key]) {
+        result[key] = value;
+      }
+    }
+  }
+}
+
+function getDbConfig(): { url: string; serviceRoleKey: string } {
+  // ...
+  const localEnvValues: Record<string, string> = {};
+  
+  // 1. 先尝试加载 .env.production（生产环境优先）
+  try {
+    const prodPath = path.join(process.cwd(), '.env.production');
+    if (fs.existsSync(prodPath)) {
+      const content = fs.readFileSync(prodPath, 'utf-8');
+      parseEnvContent(content, localEnvValues);
+    }
+  } catch { /* ignore */ }
+  
+  // 2. 再尝试加载 .env.local（不覆盖 .env.production 的值）
+  try {
+    const localPath = path.join(process.cwd(), '.env.local');
+    if (fs.existsSync(localPath)) {
+      const content = fs.readFileSync(localPath, 'utf-8');
+      parseEnvContent(content, localEnvValues);
+    }
+  } catch { /* ignore */ }
+  // ...
+}
+```
+
+**修改文件**：
+- `src/lib/credits.ts` - 添加 `parseEnvContent` 函数，修改 `getDbConfig()` 加载顺序
+
+**验证方法**：
+1. 部署到生产环境
+2. 登录用户，确认前端显示正确积分
+3. 提交生图任务，确认能正常扣除积分
+
+**状态**：✅ 已修复
 
 ---
 

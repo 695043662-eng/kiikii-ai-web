@@ -6,6 +6,9 @@
  * 
  * ⚠️ 重要修复（#118）：动态读取数据库配置，确保使用正确的数据库
  * 原因：模块加载时 process.env 可能还没被 .env.local 覆盖
+ * 
+ * ⚠️ 重要修复（#298）：与 supabase-client.ts 保持一致，先加载 .env.production 再加载 .env.local
+ * 原因：生产环境没有 .env.local，只有 .env.production
  */
 
 import { getSupabaseClient } from '@/storage/database/supabase-client';
@@ -17,6 +20,27 @@ import * as path from 'path';
 // 生产环境：系统环境变量优先
 let cachedDbConfig: { url: string; serviceRoleKey: string } | null = null;
 
+// #298 解析环境变量文件内容（与 supabase-client.ts 保持一致）
+function parseEnvContent(content: string, result: Record<string, string>): void {
+  const lines = content.split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq > 0) {
+      const key = trimmed.substring(0, eq).trim();
+      let value = trimmed.substring(eq + 1).trim();
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+      // 不覆盖已存在的值（.env.production 优先）
+      if (!result[key]) {
+        result[key] = value;
+      }
+    }
+  }
+}
+
 // 动态读取数据库配置
 function getDbConfig(): { url: string; serviceRoleKey: string } {
   // 🔒 缓存命中，直接返回
@@ -24,60 +48,57 @@ function getDbConfig(): { url: string; serviceRoleKey: string } {
     return cachedDbConfig;
   }
   
-  // 读取 .env.local
-  let localUrl = '';
-  let localServiceRoleKey = '';
-  let localAnonKey = '';
-  let localNodeEnv = '';
+  // #298 修复：先加载 .env.production，再加载 .env.local（与 supabase-client.ts 一致）
+  const localEnvValues: Record<string, string> = {};
   
+  // 1. 先尝试加载 .env.production（生产环境优先）
   try {
-    const envPath = path.join(process.cwd(), '.env.local');
-    if (fs.existsSync(envPath)) {
-      const content = fs.readFileSync(envPath, 'utf-8');
-      const lines = content.split('\n');
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith('#')) continue;
-        const eq = trimmed.indexOf('=');
-        if (eq > 0) {
-          const key = trimmed.substring(0, eq).trim();
-          let value = trimmed.substring(eq + 1).trim();
-          if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-            value = value.slice(1, -1);
-          }
-          if (key === 'SUPABASE_URL') localUrl = value;
-          if (key === 'SUPABASE_SERVICE_ROLE_KEY') localServiceRoleKey = value;
-          if (key === 'SUPABASE_ANON_KEY') localAnonKey = value;
-          if (key === 'NODE_ENV') localNodeEnv = value;
-        }
-      }
+    const prodPath = path.join(process.cwd(), '.env.production');
+    if (fs.existsSync(prodPath)) {
+      const content = fs.readFileSync(prodPath, 'utf-8');
+      parseEnvContent(content, localEnvValues);
+      console.log('[credits.ts] 📦 已加载 .env.production');
+    }
+  } catch {
+    // ignore
+  }
+  
+  // 2. 再尝试加载 .env.local（开发环境，不覆盖 .env.production 的值）
+  try {
+    const localPath = path.join(process.cwd(), '.env.local');
+    if (fs.existsSync(localPath)) {
+      const content = fs.readFileSync(localPath, 'utf-8');
+      parseEnvContent(content, localEnvValues);
+      console.log('[credits.ts] 📦 已加载 .env.local');
     }
   } catch {
     // ignore
   }
   
   // 🔧 #176 判断是否开发环境
-  const isDevelopment = process.env.NODE_ENV === 'development' || localNodeEnv === 'development';
+  const isDevelopment = process.env.NODE_ENV === 'development' || localEnvValues.NODE_ENV === 'development';
   
+  // 优先级：系统环境变量 > 本地文件
   let url: string;
   let serviceRoleKey: string;
   
   if (isDevelopment) {
-    // 开发环境：.env.local 优先
-    url = localUrl || process.env.SUPABASE_URL || '';
-    serviceRoleKey = localServiceRoleKey || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-    console.log('[credits.ts] 🔧 开发模式：使用 .env.local 配置');
+    // 开发环境：.env.local 优先（但 localEnvValues 已经合并了两个文件）
+    url = localEnvValues.SUPABASE_URL || process.env.SUPABASE_URL || '';
+    serviceRoleKey = localEnvValues.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+    console.log('[credits.ts] 🔧 开发模式：使用本地环境文件');
   } else {
-    // 生产环境：系统环境变量优先
-    url = process.env.SUPABASE_URL || localUrl || '';
-    serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || localServiceRoleKey || '';
+    // 生产环境：系统环境变量优先，回退到本地文件
+    url = process.env.SUPABASE_URL || localEnvValues.SUPABASE_URL || '';
+    serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || localEnvValues.SUPABASE_SERVICE_ROLE_KEY || '';
+    console.log('[credits.ts] 🚀 生产模式：数据库配置已加载');
   }
   
   // 🔧 #175 开发环境回退：如果没有 service_role_key，回退到 anon_key
   if (!serviceRoleKey) {
     serviceRoleKey = isDevelopment 
-      ? (localAnonKey || process.env.SUPABASE_ANON_KEY || '')
-      : (process.env.SUPABASE_ANON_KEY || localAnonKey || '');
+      ? (localEnvValues.SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '')
+      : (process.env.SUPABASE_ANON_KEY || localEnvValues.SUPABASE_ANON_KEY || '');
     if (serviceRoleKey) {
       console.log('[credits.ts] ⚠️ 使用 anon_key 代替 service_role_key（开发环境回退）');
     }

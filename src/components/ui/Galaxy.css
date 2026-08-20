@@ -1,0 +1,15 @@
+.galaxy-container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  /* #610 终结手术：删除 will-change 和 translateZ(0) */
+  /* ❌ 在 scale 容器内会触发混合合成陷阱 */
+  backface-visibility: hidden;
+}
+
+.galaxy-container canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  pointer-events: none;
+}

@@ -1,0 +1,492 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+/* 👑 ========================================
+   最终态：画质还原归零
+   删除所有 transform, will-change, image-rendering 干预
+   让 Chrome 回归最原始、最清晰的 Lanczos 模式
+   ======================================== */
+
+.canvas-image-wrapper {
+  position: absolute;
+  /* 没有任何 transform, 没有 will-change, 没有 image-rendering */
+  /* 让 Chrome 自己决定最优渲染策略 */
+}
+
+.canvas-image-wrapper img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  /* 👑 绝对禁止所有抗锯齿干预，让 Chrome 回归最原始、最清晰的 Lanczos 模式 */
+  image-rendering: auto;
+}
+
+/* 👑 ========================================
+   军师方案：磁吸高亮效果 - 纯 CSS 实现
+   ======================================== */
+/* 基础端口样式：#608 彻底删除 will-change/translateZ，回归纯 2D 渲染 */
+.port-element,
+.plus-button,
+[class*="magnet-btn"],
+[class*="connection-port"] {
+  /* #608 混合合成陷阱修复：删除 will-change 和 translateZ(0)
+     在 scale 容器内，GPU 图层会触发 CPU 图片重栅格化导致模糊！
+     仅用 z-index 保证层叠顺序，不需要 GPU 加速 */
+
+  position: absolute;
+  z-index: 9999 !important;
+}
+
+/* 磁吸激活样式：#608 同步删除 translateZ(0) */
+.port-snap-active {
+  transform: scale(1.3) !important; /* #608 删除 translateZ(0)：纯 2D 缩放即可 */
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.6) !important;
+  z-index: 10000 !important;
+}
+
+/* #60fps Phase1: 连线期间的视觉状态 - 纯 CSS class 切换，绝不触发 React 重渲染 */
+/* 灰显已连接源的面板 - 只用 opacity（GPU 加速），绝不用 filter:grayscale（会触发重栅格化） */
+.is-dimmed {
+  opacity: 0.5 !important;
+  transition: opacity 0.15s ease;
+}
+
+:not(.is-dimmed) {
+  transition: opacity 0.15s ease;
+}
+
+/* 磁吸高亮 - 目标节点边框发光 */
+.snap-highlight-active {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.6), 0 0 16px rgba(59, 130, 246, 0.3) !important;
+}
+
+/* #60fps Phase1: 磁吸高亮时，端口按钮也放大 */
+.snap-highlight-active .node-connection-port-hitbox {
+  background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.05) 100%) !important;
+  border: 2.5px solid rgba(255,255,255,0.9) !important;
+  box-shadow: 0 2px 8px rgba(255,255,255,0.15) !important;
+  transform: scale(1.3) !important;
+}
+
+/* #60fps Phase1: 灰显时连线端口隐藏 */
+.is-dimmed .node-connection-port-hitbox {
+  opacity: 0.3 !important;
+}
+
+/* 登录弹窗：彻底禁止输入框出现白色背景（包括浏览器自动填充） */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+input:-webkit-autofill::selection,
+input:autofill,
+input:autofill:hover,
+input:autofill:focus,
+input:autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px rgba(20, 20, 20, 1) inset !important;
+  box-shadow: 0 0 0 1000px rgba(20, 20, 20, 1) inset !important;
+  -webkit-text-fill-color: white !important;
+  caret-color: white !important;
+  background-color: rgba(20, 20, 20, 1) !important;
+  background: rgba(20, 20, 20, 1) !important;
+}
+
+/* 强制覆盖所有 autofill 情况 */
+@supports (-webkit-appearance: none) {
+  input[name]:-webkit-autofill {
+    -webkit-box-shadow: 0 0 0 1000px rgba(20, 20, 20, 1) inset !important;
+    box-shadow: 0 0 0 1000px rgba(20, 20, 20, 1) inset !important;
+  }
+}
+
+/* #604 核弹拆除：background-position 动画已删除 */
+/* background-position 动画无法使用 GPU 加速，会触发大面积重绘 */
+/* 原 shimmer-bg 动画已被移除，使用静态渐变替代 */
+
+/* #434 新增：Logo呼吸效果动画 */
+/* #437 优化：阴影颜色改为灰色 */
+@keyframes logo-breathe {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(100, 100, 100, 0);
+  }
+  50% {
+    transform: scale(1.03);
+    box-shadow: 0 6px 24px -4px rgba(80, 80, 80, 0.5);
+  }
+}
+
+/* #434 新增：导航菜单向下展开动画 */
+@keyframes nav-slide-down {
+  0% {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* #435 新增：提示文案闪烁呼吸效果 */
+@keyframes tip-breathe {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+}
+
+/* 自定义主题色 - 基于Logo配色 */
+:root {
+  --logo-purple: 139 158 232; /* 浅紫蓝 */
+  --logo-pink: 232 180 184; /* 豆沙粉 */
+  --logo-blue: 180 195 230; /* 灰蓝 */
+  --logo-deep-purple: 100 90 140; /* 深灰紫 */
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --font-sans:
+    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', ui-sans-serif,
+    system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+    'Courier New', monospace;
+  --font-serif:
+    'Noto Serif SC', 'Songti SC', 'SimSun', ui-serif, Georgia, Cambria,
+    'Times New Roman', Times, serif;
+}
+
+:root {
+  --radius: 0.625rem;
+  --canvas-bg: oklch(1 0 0); /* 白色 - 亮色模式画布背景 */
+  --canvas-border: oklch(0.922 0 0); /* 亮色模式画布边框 */
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --canvas-bg: oklch(0.278 0.033 256.848); /* gray-800 - 暗色模式画布背景 */
+  --canvas-border: oklch(1 0 0 / 10%); /* 暗色模式画布边框 */
+  --background: oklch(0.145 0.015 250);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0.015 250);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0.015 250);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0.015 250);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0.015 250);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0.015 250);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0.015 250);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0.015 250);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  /* 确保所有页面滚动条行为一致，避免居中偏移 */
+  html {
+    overflow-y: scroll;
+  }
+}
+
+body {
+  @apply font-sans;
+}
+
+/* 隐藏滚动条但保留滚动功能 */
+.hide-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari and Opera */
+}
+
+/* 画布页面 - 禁用文本选择和拖拽 */
+[data-canvas-area="true"],
+[data-canvas-area="true"] * {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* 禁用图片拖拽 */
+[data-canvas-area="true"] img {
+  -webkit-user-drag: none;
+  -khtml-user-drag: none;
+  -moz-user-drag: none;
+  -o-user-drag: none;
+  user-drag: none;
+  pointer-events: none;
+}
+
+/* 画布自定义光标 - 黑内白边箭头 */
+.canvas-custom-cursor,
+.canvas-area-cursor,
+[data-canvas-area="true"],
+[data-canvas-area="true"] * {
+  cursor: url('/cursors/arrow.svg') 2 2, auto !important;
+}
+
+/* 交互元素恢复原有光标样式 */
+.canvas-area-cursor button,
+.canvas-area-cursor a,
+.canvas-area-cursor [role="button"],
+.canvas-area-cursor .cursor-pointer,
+[data-canvas-area="true"] button,
+[data-canvas-area="true"] a,
+[data-canvas-area="true"] [role="button"],
+[data-canvas-area="true"] .cursor-pointer {
+  cursor: pointer !important;
+}
+
+/* 缩放手柄恢复缩放光标 - 覆盖 canvas-custom-cursor 的 !important */
+[data-canvas-area="true"] [data-resize-handle] {
+  cursor: nwse-resize !important;
+}
+[data-canvas-area="true"] [data-resize-handle="top-right"],
+[data-canvas-area="true"] [data-resize-handle="bottom-left"] {
+  cursor: nesw-resize !important;
+}
+
+.canvas-area-cursor input,
+.canvas-area-cursor textarea,
+.canvas-area-cursor .cursor-text,
+[data-canvas-area="true"] input,
+[data-canvas-area="true"] textarea,
+[data-canvas-area="true"] .cursor-text {
+  cursor: text !important;
+}
+
+.canvas-area-cursor .cursor-ew-resize,
+[data-canvas-area="true"] .cursor-ew-resize {
+  cursor: ew-resize !important;
+}
+
+.canvas-area-cursor .cursor-ns-resize,
+[data-canvas-area="true"] .cursor-ns-resize {
+  cursor: ns-resize !important;
+}
+
+/* #422 修复：重命名为 shimmer-slide，用于元素物理平移 */
+@keyframes shimmer-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* 画布占位符玫瑰曲线渐变闪烁 */
+@keyframes canvasRoseShimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+
+/* 图片加载中波动动画 */
+@keyframes loading-pulse {
+  0%, 100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+@keyframes loading-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* #317 新增：generate-panel 加载动画 */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* #360 文本面板光标闪烁动画 */
+@keyframes blink {
+  0%, 50% {
+    opacity: 1;
+  }
+  51%, 100% {
+    opacity: 0;
+  }
+}
+
+/* #363 文本面板自定义滚动条样式 */
+.text-panel-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.text-panel-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.text-panel-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(161, 161, 170, 0.3);
+  border-radius: 2px;
+}
+
+.text-panel-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(161, 161, 170, 0.5);
+}
+
+.text-panel-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(161, 161, 170, 0.3) transparent;
+}
+
+/* 防止弹窗打开时背景抖动 - 终极硬核方案 */
+/* 1. 强制 HTML 高度永远撑满且溢出，确保滚动条占位符永远在 */
+html {
+  overflow-y: scroll;
+  /* 关键：不预留滚动条空间，让滚动条覆盖在内容上 */
+  scrollbar-gutter: auto;
+}
+
+/* 2. 锁定 body，并且强制其宽度固定，不准根据滚动条消失而变宽 */
+body {
+  width: 100vw !important;
+  overflow-x: hidden !important;
+}
+
+/* 隐藏滚动条但保留滚动功能 - 不占用空间 */
+html::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+html {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* 3. 当弹窗锁定开启时 */
+body[data-scroll-locked] {
+  /* 强制抵消任何可能的自动 padding */
+  padding-right: 0 !important;
+  margin-right: 0 !important;
+  /* 禁止滚动但保留宽度 */
+  overflow: hidden !important;
+  position: relative;
+}

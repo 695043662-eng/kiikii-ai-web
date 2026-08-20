@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Single Rose Curve - #f472b6</title>
+  <style>
+    :root {
+      --bg: #f5f5f5;
+      --primary: #f472b6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: var(--bg);
+      color: #111;
+      font-family: Inter, system-ui, sans-serif;
+    }
+    .loader {
+      display: grid;
+      gap: 24px;
+      justify-items: center;
+      padding: 32px;
+    }
+    .frame {
+      width: min(80vmin, 480px);
+      aspect-ratio: 1;
+      display: grid;
+      place-items: center;
+      position: relative;
+    }
+    .frame::before {
+      content: '';
+      position: absolute;
+      inset: -20%;
+      background: radial-gradient(circle, var(--primary) 0%, transparent 70%);
+      opacity: 0.4;
+      filter: blur(25px);
+      pointer-events: none;
+    }
+    svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+      position: relative;
+      z-index: 1;
+    }
+    .info {
+      display: grid;
+      gap: 8px;
+      text-align: center;
+      position: relative;
+      z-index: 1;
+    }
+    .title {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--primary);
+    }
+    .tag {
+      font-size: 13px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: rgba(0,0,0,0.5);
+    }
+    .progress-bar {
+      width: min(80vmin, 320px);
+      height: 3px;
+      background: rgba(0,0,0,0.1);
+      border-radius: 999px;
+      overflow: hidden;
+      position: relative;
+    }
+    .progress-fill {
+      height: 100%;
+      background: var(--primary);
+      border-radius: 999px;
+      width: 0%;
+      transition: width 0.3s ease;
+      box-shadow: 0 0 10px var(--primary);
+    }
+    .percent {
+      font-size: 12px;
+      color: rgba(0,0,0,0.4);
+      font-variant-numeric: tabular-nums;
+    }
+  </style>
+</head>
+<body>
+  <div class="loader">
+    <div class="frame">
+      <svg viewBox="0 0 100 100" fill="none" aria-hidden="true">
+        <g id="group">
+          <path id="path" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" opacity="0.15"></path>
+        </g>
+      </svg>
+    </div>
+    <div class="info">
+      <div class="title">Loading</div>
+      <div class="tag">Rose Curve Animation</div>
+    </div>
+    <div class="progress-bar">
+      <div class="progress-fill" id="progFill"></div>
+    </div>
+    <div class="percent" id="pctText">0%</div>
+  </div>
+
+  <script>
+    var NS = 'http://www.w3.org/2000/svg';
+    var color = '#f472b6';
+
+    var cfg = {
+      particleCount: 64,
+      trailSpan: 0.28,
+      durationMs: 12000,
+      rotationDurationMs: 20000,
+      pulseDurationMs: 3200,
+      strokeWidth: 3.5,
+      roseA: 9.2,
+      roseABoost: 0.6,
+      roseBreathBase: 0.72,
+      roseBreathBoost: 0.28,
+      roseK: 5,
+      roseScale: 3.0
+    };
+
+    function rosePoint(progress, detailScale) {
+      var t = progress * Math.PI * 2;
+      var a = cfg.roseA + detailScale * cfg.roseABoost;
+      var k = Math.round(cfg.roseK);
+      var r = a * (cfg.roseBreathBase + detailScale * cfg.roseBreathBoost) * Math.cos(k * t);
+      return { x: 50 + Math.cos(t) * r * cfg.roseScale, y: 50 + Math.sin(t) * r * cfg.roseScale };
+    }
+
+    function normalizeProgress(progress) { return ((progress % 1) + 1) % 1; }
+
+    function getDetailScale(time) {
+      var pulseProgress = (time % cfg.pulseDurationMs) / cfg.pulseDurationMs;
+      var pulseAngle = pulseProgress * Math.PI * 2;
+      return 0.55 + ((Math.sin(pulseAngle + 0.55) + 1) / 2) * 0.45;
+    }
+
+    function getRotation(time) {
+      return -((time % cfg.rotationDurationMs) / cfg.rotationDurationMs) * 360;
+    }
+
+    function buildPath(detailScale, steps) {
+      var pts = [];
+      for (var i = 0; i <= steps; i++) {
+        var pt = rosePoint(i / steps, detailScale);
+        pts.push((i === 0 ? 'M' : 'L') + ' ' + pt.x.toFixed(2) + ' ' + pt.y.toFixed(2));
+      }
+      return pts.join(' ');
+    }
+
+    var group = document.getElementById('group');
+    var path = document.getElementById('path');
+    var progFill = document.getElementById('progFill');
+    var pctText = document.getElementById('pctText');
+
+    path.setAttribute('stroke', color);
+
+    var particles = [];
+    for (var i = 0; i < cfg.particleCount; i++) {
+      var circle = document.createElementNS(NS, 'circle');
+      circle.setAttribute('fill', color);
+      group.appendChild(circle);
+      particles.push(circle);
+    }
+
+    var startedAt = performance.now();
+
+    function animate() {
+      var time = performance.now() - startedAt;
+      var progress = (time % cfg.durationMs) / cfg.durationMs;
+      var detailScale = getDetailScale(time);
+
+      group.setAttribute('transform', 'rotate(' + getRotation(time) + ' 50 50)');
+      path.setAttribute('d', buildPath(detailScale, 360));
+
+      for (var i = 0; i < cfg.particleCount; i++) {
+        var tailOffset = i / (cfg.particleCount - 1);
+        var pt = rosePoint(normalizeProgress(progress - tailOffset * cfg.trailSpan), detailScale);
+        var fade = Math.pow(1 - tailOffset, 0.5);
+        particles[i].setAttribute('cx', pt.x.toFixed(2));
+        particles[i].setAttribute('cy', pt.y.toFixed(2));
+        particles[i].setAttribute('r', (0.8 + fade * 2.2).toFixed(2));
+        particles[i].setAttribute('opacity', (0.1 + fade * 0.9).toFixed(3));
+      }
+
+      progFill.style.width = (progress * 100) + '%';
+      pctText.textContent = Math.round(progress * 100) + '%';
+
+      requestAnimationFrame(animate);
+    }
+
+    animate();
+  </script>
+</body>
+</html>

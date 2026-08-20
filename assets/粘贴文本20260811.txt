@@ -1,0 +1,297 @@
+
+67985
+20260811153322696224
+epay
+1
+https://kiikii.me/api/payment/notify
+GET
+success
+200
+1989
+成功
+2026-08-11 15:34:40
+
+
+chrome-extension://p…/clipboard.min.js:1 Uncaught SyntaxError: Cannot use import statement outside a module
+FileSaver.js:1 [Violation] Permissions policy violation: unload is not allowed in this document.
+(anonymous) @ FileSaver.js:1
+(anonymous) @ FileSaver.js:1
+1289-5a5a56722c9974e7.js:1 [user-cache] 首次调用，清除旧缓存
+1289-5a5a56722c9974e7.js:1 [user-cache] 调用 API /api/user/info
+1289-5a5a56722c9974e7.js:1 [user-cache] 调用 API /api/user/info
+1289-5a5a56722c9974e7.js:1 [config-fetch] 实际请求: /api/config?service_type=image_generation
+static.cloudflareinsights.com/beacon.min.js/theme/default/layer.css?v=3.1.1:1  Failed to load resource: the server responded with a status of 404 ()
+static.cloudflareinsights.com/beacon.min.js/css/modules/code.css:1  Failed to load resource: the server responded with a status of 404 ()
+static.cloudflareinsights.com/beacon.min.js/css/modules/laydate/default/laydate.css?v=5.0.9:1  Failed to load resource: the server responded with a status of 404 ()
+1289-5a5a56722c9974e7.js:1 [user-cache] API 返回: {"success":true,"user":{"id":"ef3cc04d-12a7-40ec-a785-c8262cc40625","phone":"13824085362","email":"695043662@qq.com","nickname":"用户5362","avatar":null,"credits":6125,"failed_attempts":0,"is_active":true,"locked_until":null,"created_at":"2026-04-20T08:03:40.47+00:00"}}
+1289-5a5a56722c9974e7.js:1 [user-cache] 用户积分: 6125
+1289-5a5a56722c9974e7.js:1 [user-cache] API 返回: {"success":true,"user":{"id":"ef3cc04d-12a7-40ec-a785-c8262cc40625","phone":"13824085362","email":"695043662@qq.com","nickname":"用户5362","avatar":null,"credits":6125,"failed_attempts":0,"is_active":true,"locked_until":null,"created_at":"2026-04-20T08:03:40.47+00:00"}}
+1289-5a5a56722c9974e7.js:1 [user-cache] 用户积分: 6125
+1289-5a5a56722c9974e7.js:1 [#859 Debug] 图片模型数据服务端时间戳: 2026-08-11T07:33:12.789Z
+1289-5a5a56722c9974e7.js:1 [config-fetch] 实际请求: /api/config?service_type=video_generation
+1289-5a5a56722c9974e7.js:1 [config-fetch] 实际请求: /api/config?service_type=llm
+page-d9a7061541a286e1.js:1 [支付轮询] 启动轮询, 订单号: PAY178643360058494kd9q , 最大轮询次数: 150
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (1/150)
+api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433604877:1  Failed to load resource: the server responded with a status of 404 ()
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (2/150)
+api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433606880:1  Failed to load resource: the server responded with a status of 404 ()
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (3/150)
+api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433608880:1  Failed to load resource: the server responded with a status of 404 ()
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (4/150)
+api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433610894:1  Failed to load resource: the server responded with a status of 404 ()
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (5/150)
+api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433612879:1  Failed to load resource: the server responded with a status of 404 ()
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (6/150)
+api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433614886:1  Failed to load resource: the server responded with a status of 404 ()
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (7/150)
+api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433616892:1  Failed to load resource: the server responded with a status of 404 ()
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (8/150)
+api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433618881:1  Failed to load resource: the server responded with a status of 404 ()
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (9/150)
+api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433620879:1  Failed to load resource: the server responded with a status of 404 ()
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (10/150)
+api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433622881:1  Failed to load resource: the server responded with a status of 404 ()
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (11/150)
+api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433624878:1  Failed to load resource: the server responded with a status of 404 ()
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (12/150)
+api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433626879:1  Failed to load resource: the server responded with a status of 404 ()
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (13/150)
+api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433628878:1  Failed to load resource: the server responded with a status of 404 ()
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (14/150)
+api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433630881:1  Failed to load resource: the server responded with a status of 404 ()
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (15/150)
+api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433632892:1  Failed to load resource: the server responded with a status of 404 ()
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+layer.css:1  Failed to load resource: the server responded with a status of 404 ()
+laydate.css:1  Failed to load resource: the server responded with a status of 404 ()
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (16/150)
+code.css:1  Failed to load resource: the server responded with a status of 404 ()
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433634881 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (17/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433636880 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (18/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433638881 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (19/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433641265 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (20/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433643253 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (21/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433645264 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (22/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433647265 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (23/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433648898 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (24/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433650880 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (25/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433652880 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (26/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433654880 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (27/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433656880 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (28/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433658881 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (29/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433660880 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (30/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433662880 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (31/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433664880 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (32/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433666878 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (33/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433668882 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (34/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433670880 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (35/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433672880 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (36/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433674879 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (37/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433676880 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (38/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433678880 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (39/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433680880 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (40/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433682889 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (41/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433684882 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (42/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433686882 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (43/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433688882 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (44/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433691263 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (45/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433693263 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (46/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433695253 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (47/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433697263 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (48/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433699263 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (49/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433701265 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (50/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433703265 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (51/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433704879 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (52/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433706881 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (53/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433708880 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (54/150)
+page-d9a7061541a286e1.js:1  GET https://kiikii.me/api/payment/status?out_trade_no=PAY178643360058494kd9q&_t=1786433710891 404 (Not Found)
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 查询失败: 订单不存在
+a @ page-d9a7061541a286e1.js:1
+page-d9a7061541a286e1.js:1 [支付轮询] 正在查询订单: PAY178643360058494kd9q (55/150)
+
+
+{"idx":0,"id":"005521c2-b7e8-46a4-a65e-1e8dee1c9316","user_id":"ef3cc04d-12a7-40ec-a785-c8262cc40625","out_trade_no":"PAY1786339310696crbhre","price":"9.90","status":"unpaid","pay_url":null,"created_at":"2026-08-10 05:21:50.795522+00","updated_at":"2026-08-10 05:21:50.795522+00","credits":800}
+
+你去死吧！一天天说一定行！然后呢？数据库根本就没这个订单！

@@ -1,0 +1,387 @@
+> ## Documentation Index
+> Fetch the complete documentation index at: https://docs.toapis.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# MiniMax Hailuo H3 视频生成
+
+> 使用 MiniMax Hailuo H3 生成 2K 视频，支持文生视频、首尾帧图生视频和多模态参考生视频
+
+* 模型名称固定为 `MiniMax-H3`
+* 支持文生视频、首帧/尾帧图生视频，以及图片、视频、音频联合参考生成
+* 输出分辨率固定为 `2K`，时长支持 `4-15` 秒
+* 异步任务接口，提交后返回统一的 `generation.task`
+
+<Warning>
+  请优先传入公网可访问的素材 URL。首尾帧模式与多模态参考模式互斥；参考音频不能单独使用，必须同时提供至少一张参考图或一段参考视频。
+</Warning>
+
+## 认证
+
+<ParamField header="Authorization" type="string" required>
+  所有接口均需要使用 Bearer Token 认证。
+
+  ```text theme={null}
+  Authorization: Bearer YOUR_API_KEY
+  ```
+</ParamField>
+
+## 请求参数
+
+<ParamField body="model" type="string" default="MiniMax-H3" required>
+  视频生成模型名称，固定为 `MiniMax-H3`。
+</ParamField>
+
+<ParamField body="prompt" type="string" required>
+  视频内容描述，最多 `7000` 个字符。建议明确描述主体、动作、场景、镜头、风格和声音要求。
+</ParamField>
+
+<ParamField body="duration" type="integer" default={5}>
+  输出视频时长，支持 `4-15` 秒的整数值。
+</ParamField>
+
+<ParamField body="resolution" type="string" default="2K">
+  输出视频分辨率，当前仅支持 `2K`。
+</ParamField>
+
+<ParamField body="aspect_ratio" type="string" default="16:9">
+  输出视频宽高比。
+
+  可选值：`21:9`、`16:9`、`4:3`、`1:1`、`3:4`、`9:16`、`adaptive`。
+
+  * 文生视频：默认 `16:9`，不能使用 `adaptive`
+  * 首帧/尾帧模式：始终按输入图片自适应，传入的具体比例会被忽略
+  * 多模态参考模式：默认 `adaptive`，也可指定具体比例
+</ParamField>
+
+<ParamField body="image_urls" type="string[]">
+  兼容模式下的图片 URL 数组。新接入建议优先使用 `image_with_roles` 明确图片用途。
+
+  * 1 张图片：作为 `first_frame`
+  * 2 张图片：依次作为 `first_frame` 和 `last_frame`
+  * 3-9 张图片：作为 `reference_image`
+
+  <Warning>
+    不要同时传入 `image_urls` 和 `image_with_roles`，否则图片用途可能产生歧义。
+  </Warning>
+</ParamField>
+
+<ParamField body="image_with_roles" type="array">
+  带角色的图片数组。
+
+  <Expandable title="显示图片字段">
+    <ParamField body="url" type="string" required>
+      图片 URL。支持 JPG、JPEG、PNG、WebP、HEIC、HEIF；单文件不超过 `30 MB`，宽高均为 `256-5760 px`，宽高比为 `0.4-2.5`。
+    </ParamField>
+
+    <ParamField body="role" type="string" required>
+      图片角色：
+
+      * `first_frame` - 首帧，最多 1 张
+      * `last_frame` - 尾帧，最多 1 张
+      * `reference_image` - 参考图，最多 9 张
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="video_with_roles" type="array">
+  多模态参考模式下的视频数组，最多 `3` 段。
+
+  <Expandable title="显示视频字段">
+    <ParamField body="url" type="string" required>
+      公网可访问的视频 URL。支持 MP4、MOV，视频编码支持 H.264/AVC、H.265/HEVC；单文件不超过 `50 MB`，单段时长 `2-15` 秒，全部参考视频总时长不超过 `15` 秒。
+    </ParamField>
+
+    <ParamField body="role" type="string" required>
+      固定为 `reference_video`。
+    </ParamField>
+  </Expandable>
+
+  <Note>
+    ToAPIs 会读取参考视频的实际时长用于计费，请勿提交客户端计算的时长字段。
+  </Note>
+</ParamField>
+
+<ParamField body="audio_with_roles" type="array">
+  多模态参考模式下的音频数组，最多 `3` 段。
+
+  <Expandable title="显示音频字段">
+    <ParamField body="url" type="string" required>
+      公网可访问的音频 URL。支持 WAV、MP3；单文件不超过 `15 MB`，单段时长 `2-15` 秒，全部参考音频总时长不超过 `15` 秒。
+    </ParamField>
+
+    <ParamField body="role" type="string" required>
+      固定为 `reference_audio`。
+    </ParamField>
+  </Expandable>
+
+  <Warning>
+    参考音频不能单独使用，必须同时传入至少一项 `reference_image` 或 `reference_video`。
+  </Warning>
+</ParamField>
+
+<ParamField body="watermark" type="boolean" default={false}>
+  是否在生成视频中添加 AIGC 标识水印。
+</ParamField>
+
+<ParamField body="client_business_id" type="string">
+  客户侧业务 ID，例如订单号或流水号。提交后可使用同一状态接口按该 ID 查询任务。
+</ParamField>
+
+<ParamField body="callback_url" type="string">
+  ToAPIs 标准任务完成回调地址。需先配置 Token URL 和签名密钥；详见 [任务 Webhook](/docs/cn/api-reference/webhooks/task-webhooks)。
+</ParamField>
+
+## 输入模式
+
+| 模式       | 输入                                      | `aspect_ratio`        |
+| -------- | --------------------------------------- | --------------------- |
+| 文生视频     | `prompt`                                | 具体比例，默认 `16:9`        |
+| 首帧图生视频   | `prompt` + 1 张 `first_frame`            | 自动使用 `adaptive`       |
+| 首尾帧图生视频  | `prompt` + `first_frame` + `last_frame` | 自动使用 `adaptive`       |
+| 多模态参考生视频 | `prompt` + 参考图片/视频/音频                   | 默认 `adaptive`，可指定具体比例 |
+
+多模态参考限制：
+
+* 参考图最多 `9` 张
+* 参考视频最多 `3` 段
+* 参考音频最多 `3` 段
+* 图片、视频、音频合计最多 `12` 个文件
+* 首尾帧角色不能与任意参考角色混用
+
+## 请求示例
+
+### 文生视频
+
+```json theme={null}
+{
+  "model": "MiniMax-H3",
+  "prompt": "史诗级太空歌剧院线预告，女舰长站在巨大观景窗前，舰队跃迁离去，电影级光影",
+  "duration": 5,
+  "resolution": "2K",
+  "aspect_ratio": "16:9"
+}
+```
+
+### 首尾帧图生视频
+
+```json theme={null}
+{
+  "model": "MiniMax-H3",
+  "prompt": "女孩从童年自然成长为青年，镜头平稳推进，保持人物身份一致",
+  "duration": 5,
+  "resolution": "2K",
+  "image_with_roles": [
+    {"url": "https://example.com/start.jpg", "role": "first_frame"},
+    {"url": "https://example.com/end.jpg", "role": "last_frame"}
+  ]
+}
+```
+
+### 多参考图生成
+
+```json theme={null}
+{
+  "model": "MiniMax-H3",
+  "prompt": "保持图片1中的人物和图片2中的服装设计，让角色走过雨夜街道",
+  "duration": 6,
+  "resolution": "2K",
+  "aspect_ratio": "9:16",
+  "image_with_roles": [
+    {"url": "https://example.com/person.png", "role": "reference_image"},
+    {"url": "https://example.com/outfit.png", "role": "reference_image"}
+  ]
+}
+```
+
+### 视频与音频联合参考
+
+```json theme={null}
+{
+  "model": "MiniMax-H3",
+  "prompt": "参考视频1的动作和镜头节奏，并使用音频1的音色完成角色对白",
+  "duration": 5,
+  "resolution": "2K",
+  "aspect_ratio": "adaptive",
+  "video_with_roles": [
+    {"url": "https://example.com/motion.mp4", "role": "reference_video"}
+  ],
+  "audio_with_roles": [
+    {"url": "https://example.com/voice.mp3", "role": "reference_audio"}
+  ]
+}
+```
+
+## 响应
+
+<ResponseField name="id" type="string">
+  ToAPIs 任务 ID，用于查询任务状态。
+</ResponseField>
+
+<ResponseField name="object" type="string">
+  对象类型，固定为 `generation.task`。
+</ResponseField>
+
+<ResponseField name="model" type="string">
+  本次请求使用的模型名称，固定为 `MiniMax-H3`。
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  任务状态：`queued`、`in_progress`、`completed` 或 `failed`。
+</ResponseField>
+
+<ResponseField name="progress" type="integer">
+  任务进度百分比，范围 `0-100`。
+</ResponseField>
+
+<ResponseField name="created_at" type="integer">
+  任务创建时间的 Unix 时间戳（秒）。
+</ResponseField>
+
+<Note>
+  提交成功后，使用 [获取视频任务状态](../../tasks/video-status) 轮询。任务完成时，视频 URL 位于 `result.data[0].url`。
+</Note>
+
+<RequestExample>
+  ```bash cURL（文生视频） theme={null}
+  curl --request POST \
+    --url https://toapis.com/v1/videos/generations \
+    --header 'Authorization: Bearer <token>' \
+    --header 'Content-Type: application/json' \
+    --data '{
+      "model": "MiniMax-H3",
+      "prompt": "一名宇航员站在月球边缘眺望蓝色地球，镜头缓慢推进",
+      "duration": 5,
+      "resolution": "2K",
+      "aspect_ratio": "16:9"
+    }'
+  ```
+
+  ```bash cURL（首尾帧图生视频） theme={null}
+  curl --request POST \
+    --url https://toapis.com/v1/videos/generations \
+    --header 'Authorization: Bearer <token>' \
+    --header 'Content-Type: application/json' \
+    --data '{
+      "model": "MiniMax-H3",
+      "prompt": "女孩从童年自然成长为青年，镜头平稳推进，保持人物身份一致",
+      "duration": 5,
+      "resolution": "2K",
+      "image_with_roles": [
+        {"url": "https://example.com/start.jpg", "role": "first_frame"},
+        {"url": "https://example.com/end.jpg", "role": "last_frame"}
+      ]
+    }'
+  ```
+
+  ```bash cURL（多参考图） theme={null}
+  curl --request POST \
+    --url https://toapis.com/v1/videos/generations \
+    --header 'Authorization: Bearer <token>' \
+    --header 'Content-Type: application/json' \
+    --data '{
+      "model": "MiniMax-H3",
+      "prompt": "保持图片1中的人物和图片2中的服装设计，让角色走过雨夜街道",
+      "duration": 6,
+      "resolution": "2K",
+      "aspect_ratio": "9:16",
+      "image_with_roles": [
+        {"url": "https://example.com/person.png", "role": "reference_image"},
+        {"url": "https://example.com/outfit.png", "role": "reference_image"}
+      ]
+    }'
+  ```
+
+  ```bash cURL（图片、视频、音频联合参考） theme={null}
+  curl --request POST \
+    --url https://toapis.com/v1/videos/generations \
+    --header 'Authorization: Bearer <token>' \
+    --header 'Content-Type: application/json' \
+    --data '{
+      "model": "MiniMax-H3",
+      "prompt": "保持图片1中的人物，参考视频1的动作和运镜，并使用音频1的音色完成角色对白",
+      "duration": 5,
+      "resolution": "2K",
+      "aspect_ratio": "adaptive",
+      "image_with_roles": [
+        {"url": "https://example.com/person.png", "role": "reference_image"}
+      ],
+      "video_with_roles": [
+        {"url": "https://example.com/motion.mp4", "role": "reference_video"}
+      ],
+      "audio_with_roles": [
+        {"url": "https://example.com/voice.mp3", "role": "reference_audio"}
+      ]
+    }'
+  ```
+
+  ```python Python（多模态参考） theme={null}
+  import requests
+
+  response = requests.post(
+      "https://toapis.com/v1/videos/generations",
+      headers={
+          "Authorization": "Bearer your-ToAPIs-key",
+          "Content-Type": "application/json",
+      },
+      json={
+          "model": "MiniMax-H3",
+          "prompt": "保持图片1中的人物，参考视频1的动作和运镜，并使用音频1的音色完成角色对白",
+          "duration": 5,
+          "resolution": "2K",
+          "aspect_ratio": "adaptive",
+          "image_with_roles": [
+              {"url": "https://example.com/person.png", "role": "reference_image"}
+          ],
+          "video_with_roles": [
+              {"url": "https://example.com/motion.mp4", "role": "reference_video"}
+          ],
+          "audio_with_roles": [
+              {"url": "https://example.com/voice.mp3", "role": "reference_audio"}
+          ],
+      },
+  )
+
+  print(response.json())
+  ```
+
+  ```javascript JavaScript（多模态参考） theme={null}
+  const response = await fetch("https://toapis.com/v1/videos/generations", {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer your-ToAPIs-key",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: "MiniMax-H3",
+      prompt: "保持图片1中的人物，参考视频1的动作和运镜，并使用音频1的音色完成角色对白",
+      duration: 5,
+      resolution: "2K",
+      aspect_ratio: "adaptive",
+      image_with_roles: [
+        {url: "https://example.com/person.png", role: "reference_image"}
+      ],
+      video_with_roles: [
+        {url: "https://example.com/motion.mp4", role: "reference_video"}
+      ],
+      audio_with_roles: [
+        {url: "https://example.com/voice.mp3", role: "reference_audio"}
+      ]
+    })
+  });
+
+  console.log(await response.json());
+  ```
+</RequestExample>
+
+<ResponseExample>
+  ```json 200 theme={null}
+  {
+    "id": "vid_01KZ3H3EXAMPLE00000000000",
+    "object": "generation.task",
+    "model": "MiniMax-H3",
+    "status": "queued",
+    "progress": 0,
+    "created_at": 1785729000
+  }
+  ```
+</ResponseExample>

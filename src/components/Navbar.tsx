@@ -1,0 +1,314 @@
+'use client';
+
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { User } from 'lucide-react';
+import { usePathname } from 'next/navigation';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { motion } from 'framer-motion';
+import { clearSensitiveLocalStorage, removeAuthSignal } from '@/lib/local-storage-cleanup';
+
+interface UserInfo {
+  id: string;
+  phone: string;
+  nickname: string;
+  avatar?: string;
+  credits: number;
+}
+
+interface NavbarProps {
+  isLoggedIn: boolean;
+  setIsLoggedIn: (value: boolean) => void;
+  historyPromptsOpen?: boolean;
+  setHistoryPromptsOpen?: (value: boolean) => void;
+  historyRecordsOpen?: boolean;
+  setHistoryRecordsOpen?: (value: boolean) => void;
+  transparent?: boolean;
+  noBorder?: boolean;
+}
+
+// 全局用户状态 - 使用简单的闭包存储
+const createUserStore = () => {
+  let credits = 0;
+  let listeners: Set<() => void> = new Set();
+
+  return {
+    getCredits: () => credits,
+    setCredits: (value: number) => {
+      credits = value;
+      listeners.forEach(listener => listener());
+    },
+    subscribe: (listener: () => void) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    }
+  };
+};
+
+const userStore = createUserStore();
+
+export default function Navbar({
+  isLoggedIn,
+  setIsLoggedIn,
+  historyPromptsOpen,
+  setHistoryPromptsOpen,
+  historyRecordsOpen,
+  setHistoryRecordsOpen,
+  transparent = false,
+  noBorder = false,
+}: NavbarProps) {
+  const pathname = usePathname();
+  const [user, setUser] = useState<UserInfo | null>(null);
+  const [isLoading, setIsLoading] = useState(true); // 加载状态，防止布局偏移
+
+  // 获取用户信息
+  // 🔧 #838 使用 fetchUserWithCache 去重，避免多个组件同时请求 /api/user/info
+  const fetchUserInfo = useCallback(async () => {
+    try {
+      const { fetchUserWithCache } = await import('@/lib/user-cache');
+      const userInfo = await fetchUserWithCache();
+      
+      if (userInfo) {
+        setUser(userInfo);
+        userStore.setCredits(userInfo.credits);
+        setIsLoggedIn(true);
+      } else {
+        setUser(null);
+        setIsLoggedIn(false);
+      }
+    } catch (error) {
+      console.error('获取用户信息失败:', error);
+      setUser(null);
+      setIsLoggedIn(false);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [setIsLoggedIn]);
+
+  // 初始化获取用户信息（只在首次渲染时执行，不依赖 pathname）
+  useEffect(() => {
+    if (pathname !== '/login' && pathname !== '/register') {
+      fetchUserInfo();
+    } else {
+      setIsLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);  // 空依赖，只在组件挂载时执行一次
+
+  // 🔧 #838 用 ref 持有最新 user，避免 creditsChanged 监听器因 user 变化反复重注册
+  const userRef = useRef<UserInfo | null>(null);
+  useEffect(() => { userRef.current = user; }, [user]);
+
+  // #270 监听积分变化事件（本地热更新，0 API 请求）
+  // 🔧 #838 去掉 user 依赖，只依赖 fetchUserInfo（稳定引用），防止 user 变化→重注册→闭包更新→循环
+  useEffect(() => {
+    const handleCreditsChange = (event: Event) => {
+      const customEvent = event as CustomEvent<{ userId?: string; newCredits?: number }>;
+      const { userId, newCredits } = customEvent.detail || {};
+      const currentUser = userRef.current;
+      
+      // 严格校验：必须是当前登录用户的积分变化
+      if (userId && newCredits !== undefined && currentUser && currentUser.id === userId) {
+        console.log(`[Navbar] #270 本地热更新积分: ${currentUser.credits} → ${newCredits}`);
+        const updatedUser = { ...currentUser, credits: newCredits };
+        setUser(updatedUser);
+        userStore.setCredits(newCredits);
+      } else if (userId && currentUser && currentUser.id !== userId) {
+        // 其他用户的积分变化，忽略
+        return;
+      } else {
+        // 🔥 #886 修复：兜底改为 else（不再限制 !userId || !currentUser）
+        // 覆盖场景：有 userId 但缺 newCredits（如 API 刷新失败）→ 仍需回退到 API 刷新
+        console.log('[Navbar] 积分变化事件回退到 API 刷新');
+        // 先清除缓存，确保拉到最新数据
+        import('@/lib/user-cache').then(({ clearCachedUser }) => {
+          clearCachedUser();
+          fetchUserInfo();
+        });
+      }
+    };
+
+    window.addEventListener('creditsChanged', handleCreditsChange);
+    return () => window.removeEventListener('creditsChanged', handleCreditsChange);
+  }, [fetchUserInfo]);
+
+  const navItems = [
+    { name: '首页', href: '/', active: pathname === '/' },
+    { name: '画布', href: '/canvas', active: pathname === '/canvas' },
+    { name: '图片生成', href: '/generate', active: pathname === '/generate' },
+    { name: '视频生成', href: '/video', active: pathname === '/video' },
+    { name: '模型列表', href: '/models', active: pathname === '/models' },
+  ];
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/logout', { method: 'POST' });
+      setUser(null);
+      setIsLoggedIn(false);
+      // #890 终极清扫：登出时统一调用集中式清理函数，物理清空所有敏感 localStorage
+      clearSensitiveLocalStorage();
+      // #890 终极清扫：删除 auth_signal（触发其他标签页 storage 事件同步登出）
+      removeAuthSignal();
+      window.location.href = '/';
+    } catch (error) {
+      console.error('注销失败:', error);
+    }
+  };
+
+  // 打开登录模态框
+  const handleOpenLogin = () => {
+    window.dispatchEvent(new CustomEvent('openLogin'));
+  };
+
+  // 打开注册模态框
+  const handleOpenRegister = () => {
+    window.dispatchEvent(new CustomEvent('openRegister'));
+  };
+
+  return (
+    <nav 
+      className={`transition-colors ${
+        noBorder 
+          ? transparent 
+            ? 'bg-transparent' 
+            : 'bg-white dark:bg-gray-900'
+          : transparent
+            ? 'bg-transparent shadow-sm border-b border-white/10'
+            : 'bg-white dark:bg-gray-900 shadow-sm border-b border-gray-200 dark:border-gray-800'
+      }`}
+      style={noBorder ? { borderBottom: 'none' } : undefined}
+    >
+      <div className="container mx-auto px-4" style={{ height: '60px' }}>
+        <div className="flex items-center justify-between h-full">
+          {/* 左侧品牌区 */}
+          <div className="flex items-center">
+              {/* #470 移除 translateX 偏移，防止小屏幕溢出 */}
+              <Link href="/" className="flex items-center gap-3 group" style={{ height: '100px' }}>
+                {/* 🔧 #430 主页Logo - 白色版本 */}
+                <img 
+                  src="/logo-main-white.png" 
+                  alt="Kiikii AI" 
+                  className="transition-all duration-300 group-hover:brightness-110 group-hover:saturate-110"
+                  style={{ 
+                    height: '54px', 
+                    width: 'auto',
+                    opacity: 1,
+                  }} 
+                  referrerPolicy="no-referrer-when-downgrade"
+                />
+                <div className="flex flex-col">
+                  <span className={`text-xl font-bold ${transparent ? 'text-white' : 'text-gray-900 dark:text-white'}`}>Kiikii AI</span>
+                  <span className={`text-xs tracking-wider ${transparent ? 'text-white/60' : 'text-gray-500 dark:text-gray-400'}`}>DreamVision AI</span>
+                </div>
+              </Link>
+          </div>
+
+          {/* 中间导航区 */}
+          <div className="hidden md:flex items-center gap-1">
+            {navItems.map((item) => (
+              <motion.div
+                key={item.name}
+                initial={false}
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.95 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+              >
+                <Link
+                  href={item.href}
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                    item.active
+                      ? transparent
+                        ? 'text-white bg-white/20'
+                        : 'text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-800'
+                      : transparent
+                        ? 'text-white/70 hover:text-white hover:bg-white/10'
+                        : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  {item.name}
+                </Link>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* 右侧用户区 */}
+          <div className="flex items-center gap-3">
+            {/* 主题切换 */}
+            <motion.div initial={false} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
+              <ThemeToggle />
+            </motion.div>
+
+            {isLoading ? (
+              /* 加载中占位，防止布局偏移 */
+              /* #470 小屏幕时移除偏移，防止溢出 */
+              /* #471 确保与实际内容布局一致，防止抖动 */
+              <div className="flex items-center gap-2">
+                <div className={`w-8 h-8 rounded-full ${transparent ? 'bg-white/20' : 'bg-gray-200 dark:bg-gray-700'} animate-pulse`} />
+              </div>
+            ) : user ? (
+              <div className="flex items-center gap-2"> {/* #470 移除负边距偏移，防止小屏幕溢出 */}
+                {/* 用户信息 - 点击进入个人主页 */}
+                <Link href="/records" className="flex items-center gap-2 cursor-pointer">
+                  <motion.div 
+                    initial={false}
+                    whileHover={{ scale: 1.05 }} 
+                    whileTap={{ scale: 0.95 }}
+                    className="flex items-center gap-2"
+                  >
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                      transparent ? 'bg-white/20' : 'bg-gray-200 dark:bg-gray-700'
+                    }`}>
+                      {user.avatar ? (
+                        <img src={user.avatar} alt="avatar" className="w-full h-full rounded-full object-cover" referrerPolicy="no-referrer-when-downgrade" />
+                      ) : (
+                        <User className={`w-5 h-5 ${transparent ? 'text-white' : 'text-gray-500 dark:text-gray-400'}`} />
+                      )}
+                    </div>
+                    <span className={`text-sm font-medium ${transparent ? 'text-white' : 'text-gray-700 dark:text-gray-300'}`}>
+                      {user.nickname}
+                    </span>
+                  </motion.div>
+                </Link>
+
+                {/* 注销按钮 */}
+                <motion.div initial={false} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={`text-xs ${transparent ? 'text-white/70 hover:text-white hover:bg-white/10' : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'}`}
+                    onClick={handleLogout}
+                  >
+                    注销
+                  </Button>
+                </motion.div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2"> {/* #470 #471 统一布局，防止抖动 */}
+                <motion.div initial={false} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className={`text-sm ${transparent ? 'text-white/70 hover:text-white hover:bg-white/10' : 'text-gray-600 dark:text-gray-300'}`}
+                    onClick={handleOpenLogin}
+                  >
+                    登录
+                  </Button>
+                </motion.div>
+                <motion.div initial={false} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
+                  <Button
+                    size="sm"
+                    className="text-sm bg-gradient-to-r from-[rgb(139,158,232)] to-[rgb(232,180,184)] hover:from-[rgb(120,140,220)] to-[rgb(212,160,170)] text-white brightness-110 saturate-[1.1]"
+                    onClick={handleOpenRegister}
+                  >
+                    注册
+                  </Button>
+                </motion.div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </nav>
+  );
+}

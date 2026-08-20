@@ -6,6 +6,50 @@
 
 ---
 
+## #894 铁血封杀：彻底焊死全站未登录用户的上传入口，100%绝对拦截
+
+**状态**: ✅ 已修复 | **日期**: 2026-08-20
+
+**问题**:
+#893 采用 PLG 模式"允许预览体验，生成时拦截"策略，但用户要求**绝对封杀**——未登录用户不允许任何形式的上传，一丁点预览都不给。generate/page.tsx 和 video/page.tsx 的3个上传函数（handleReferenceImageUpload × 2、handleVideoUpload × 1）完全没有登录拦截，用户可以直接选择文件并触发上传流程。
+
+**修复**:
+全站所有上传入口（函数级 + 按钮级）加入 `!isLoggedIn` 硬拦截，总计 **14处**（5处新加 + 9处已有）：
+
+| 序号 | 文件 | 位置 | 拦截方式 | 状态 |
+|------|------|------|----------|------|
+| 1 | canvas/page.tsx | handleFileImport L2372 | onChange 拦截 + `e.target.value = ''` | #887 已有 |
+| 2 | canvas/page.tsx | handleReferenceImageUpload L4669 | onChange 拦截 + `e.target.value = ''` | #892 已有 |
+| 3 | canvas/page.tsx | handleVideoUpload L4805 | onChange 拦截 + `e.target.value = ''` | #892 已有 |
+| 4 | RightPanel.tsx | 图片按钮 onClick L1253 | 不触发 input click | #892 已有 |
+| 5 | RightPanel.tsx | 视频按钮 onClick L1293 | 不触发 input click | #892 已有 |
+| 6 | RightPanel.tsx | 音频按钮 onClick L1404 | 不触发 input click | #892 已有 |
+| 7 | RightPanel.tsx | 视频 input onChange L1633 | 拦截 + `e.target.value = ''` | #892 已有 |
+| 8 | RightPanel.tsx | 音频 input onChange L1695 | 拦截 + `e.target.value = ''` | #892 已有 |
+| **9** | **generate/page.tsx** | **handleReferenceImageUpload L1751** | **onChange 拦截 + `event.target.value = ''`** | **#894 新增** |
+| **10** | **generate/page.tsx** | **上传按钮 onClick L2985** | **不触发 input click** | **#894 新增** |
+| **11** | **video/page.tsx** | **handleVideoUpload L933** | **onChange 拦截 + `e.target.value = ''`** | **#894 新增** |
+| **12** | **video/page.tsx** | **handleReferenceImageUpload L1460** | **onChange 拦截 + `event.target.value = ''`** | **#894 新增** |
+| **13** | **video/page.tsx** | **参考图按钮 onClick L2232** | **不触发 input click** | **#894 新增** |
+| **14** | **video/page.tsx** | **视频按钮 onClick L2271** | **不触发 input click** | **#894 新增** |
+| **15** | **video/page.tsx** | **音频按钮 onClick L2301** | **不触发 input click** | **#894 新增** |
+| **16** | **video/page.tsx** | **视频 input onChange L2338** | **拦截 + `e.target.value = ''`** | **#894 新增** |
+| **17** | **video/page.tsx** | **音频 input onChange L2377** | **拦截 + `e.target.value = ''`** | **#894 新增** |
+| **18** | **GeneratePanelNode.tsx** | **音频按钮 onClick L6164** | **不触发 input click** | **#894 新增** |
+| **19** | **GeneratePanelNode.tsx** | **音频 input onChange L6191** | **拦截 + `e.target.value = ''`** | **#894 新增** |
+
+**依赖修复**:
+- `video/page.tsx` handleVideoUpload 的 useCallback 依赖添加 `isLoggedIn`
+- `canvas/page.tsx` handleReferenceImageUpload 的 useCallback 依赖添加 `isLoggedIn`
+- `canvas/page.tsx` handleVideoUpload 的 useCallback 依赖添加 `isLoggedIn`
+
+**关键教训**:
+- **双层拦截铁律**：onClick 拦截阻止触发 input（不让文件选择框弹出），onChange 拦截兜底（万一 input 被触发也能阻断），两层必须同时存在
+- **useCallback 依赖完整性**：函数内引用 `isLoggedIn` 必须加入依赖数组，否则闭包陷阱导致拦截永远读旧值
+- **全站扫描必须覆盖按钮 onClick**：只搜函数定义不够，还必须搜所有触发 `.current?.click()` 的按钮入口
+
+---
+
 ## #893 全局防线补齐：拖拽/粘贴防御+硬切动画清剿+上传拦截UX审计
 
 **状态**: ✅ 已修复 | **日期**: 2026-08-18

@@ -930,6 +930,13 @@ export default function VideoGeneratePage() {
 
   // 视频上传处理（HappyHorse video-edit 模式）
   const handleVideoUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    // #894 铁血封杀：未登录绝对不允许上传，一丁点预览都不给
+    if (!isLoggedIn) {
+      setAuthModalOpen(true);
+      if (e?.target) e.target.value = '';
+      return;
+    }
+
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('video/')) {
@@ -1001,7 +1008,7 @@ export default function VideoGeneratePage() {
     setIsVideoUploading(false);
     // 重置 input 以便重复选择同一文件（注意：现在使用合并的 fileInputRef）
     if (fileInputRef.current) fileInputRef.current.value = '';
-  }, [isModeSwitchModel, model]);
+  }, [isModeSwitchModel, model, isLoggedIn]);
 
   // Seedance 2.0 参考视频上传（多段，不同于主视频 inputVideoUrl）
   const handleRefVideoUpload = useCallback(async (file: File) => {
@@ -1450,6 +1457,13 @@ export default function VideoGeneratePage() {
   };
 
   const handleReferenceImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    // #894 铁血封杀：未登录绝对不允许上传，一丁点预览都不给
+    if (!isLoggedIn) {
+      setAuthModalOpen(true);
+      if (event?.target) event.target.value = '';
+      return;
+    }
+
     const inputElement = event.target;
     const files = inputElement.files;
     
@@ -2214,7 +2228,11 @@ export default function VideoGeneratePage() {
                 if (canUpload) {
                   return (
                     <button
-                      onClick={() => fileInputRef.current?.click()}
+                      onClick={() => {
+                        // #894 铁血封杀：未登录绝对不允许上传
+                        if (!isLoggedIn) { setAuthModalOpen(true); return; }
+                        fileInputRef.current?.click();
+                      }}
                       className="w-full aspect-square rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center cursor-pointer hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
                       title="上传参考图"
                     >
@@ -2249,7 +2267,11 @@ export default function VideoGeneratePage() {
                 if (canUpload) {
                   return (
                     <button
-                      onClick={() => refVideoInputRef.current?.click()}
+                      onClick={() => {
+                        // #894 铁血封杀：未登录绝对不允许上传
+                        if (!isLoggedIn) { setAuthModalOpen(true); return; }
+                        refVideoInputRef.current?.click();
+                      }}
                       className="w-full aspect-square rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center cursor-pointer hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
                       title="上传参考视频"
                     >
@@ -2275,7 +2297,11 @@ export default function VideoGeneratePage() {
                 if (canUpload) {
                   return (
                     <button
-                      onClick={() => refAudioInputRef.current?.click()}
+                      onClick={() => {
+                        // #894 铁血封杀：未登录绝对不允许上传
+                        if (!isLoggedIn) { setAuthModalOpen(true); return; }
+                        refAudioInputRef.current?.click();
+                      }}
                       className="w-full aspect-square rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 flex flex-col items-center justify-center cursor-pointer hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
                       title="上传参考音频"
                     >
@@ -2309,6 +2335,12 @@ export default function VideoGeneratePage() {
               type="file"
               accept="video/mp4,video/quicktime,.mp4,.mov"
               onChange={(e) => {
+                // #894 铁血封杀：未登录绝对不允许上传，一丁点预览都不给
+                if (!isLoggedIn) {
+                  setAuthModalOpen(true);
+                  if (e?.target) e.target.value = '';
+                  return;
+                }
                 const file = e.target.files?.[0];
                 if (!file) return;
                 const family = ModelDetector.getFamily(model);
@@ -2342,6 +2374,12 @@ export default function VideoGeneratePage() {
               accept="audio/wav,audio/mp3,audio/mpeg,.wav,.mp3"
               multiple={false}
               onChange={async (e) => {
+                // #894 铁血封杀：未登录绝对不允许上传，一丁点预览都不给
+                if (!isLoggedIn) {
+                  setAuthModalOpen(true);
+                  if (e?.target) e.target.value = '';
+                  return;
+                }
                 const file = e.target.files?.[0];
                 if (!file) return;
                 const maxLimits = getModelMaxLimits(model);

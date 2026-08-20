@@ -6160,7 +6160,11 @@ const GeneratePanelNodeComponent = ({
                       {/* 音频上传按钮 - 正方形，模型支持就显示 */}
                       {refAudioFiles.length < 10 && (
                         <button
-                          onClick={() => panelAudioInputRef.current?.click()}
+                          onClick={() => {
+                            // #894 铁血封杀：未登录绝对不允许上传
+                            if (!isLoggedIn) { setAuthModalOpen(true); return; }
+                            panelAudioInputRef.current?.click();
+                          }}
                           style={{
                             width: '32px', height: '32px', borderRadius: '6px',
                             border: '2px dashed #3f3f46', background: 'transparent',
@@ -6184,6 +6188,12 @@ const GeneratePanelNodeComponent = ({
                         multiple
                         ref={panelAudioInputRef}
                         onChange={(e) => {
+                          // #894 铁血封杀：未登录绝对不允许上传，一丁点预览都不给
+                          if (!isLoggedIn) {
+                            setAuthModalOpen(true);
+                            if (e?.target) e.target.value = '';
+                            return;
+                          }
                           const files = Array.from(e.target.files || []);
                           if (files.length === 0) return;
                           const currentLimits = getMaterialTypeLimits(hhCurrentMode, localModel);

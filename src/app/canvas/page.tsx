@@ -4795,7 +4795,7 @@ function CanvasApp({ canvas, router }: { canvas: CanvasContextType; router: Retu
     
     // 清空 input，允许重复选择相同文件
     e.target.value = '';
-  }, [chatImageBase64s.length, chatImageMd5s, chatImageUrls, chatImageKeys, processUploadFiles, selectedModel]);
+  }, [chatImageBase64s.length, chatImageMd5s, chatImageUrls, chatImageKeys, processUploadFiles, selectedModel, isLoggedIn]);
 
   // 对话框视频上传处理（HappyHorse video-edit 模式）
   const handleVideoUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -4826,7 +4826,7 @@ function CanvasApp({ canvas, router }: { canvas: CanvasContextType; router: Retu
     }
     setIsVideoUploading(false);
     e.target.value = '';
-  }, [setChatVideoUrl]);
+  }, [setChatVideoUrl, isLoggedIn]);
 
   return (
     <div className="flex flex-1 overflow-hidden select-none">

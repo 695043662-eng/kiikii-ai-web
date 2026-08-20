@@ -1748,6 +1748,13 @@ export default function SingleGeneratePage() {
   // 【A 计划】处理参考图上传（使用乐观上传 Hook）
   // #048 修复：上传完成后才能提交，图片显示加载转圈
   const handleReferenceImageUpload = async (event: any) => {
+    // #894 铁血封杀：未登录绝对不允许上传，一丁点预览都不给
+    if (!isLoggedIn) {
+      setAuthModalOpen(true);
+      if (event?.target) event.target.value = '';
+      return;
+    }
+
     const files = event.target.files;
     
     if (!files || files.length === 0) {
@@ -2974,7 +2981,11 @@ export default function SingleGeneratePage() {
               {/* 上传按钮 - 最多6张（含压缩中的占位），网格布局 */}
               {Math.max(referenceImages.length, referenceImageUrls.length) + compressingCount < 6 && (
                 <button
-                  onClick={() => document.getElementById('single-ref-upload')?.click()}
+                  onClick={() => {
+                    // #894 铁血封杀：未登录绝对不允许上传
+                    if (!isLoggedIn) { setAuthModalOpen(true); return; }
+                    document.getElementById('single-ref-upload')?.click();
+                  }}
                   className="aspect-square rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex flex-col items-center justify-center gap-1"
                 >
                   <Upload className="w-8 h-8 text-gray-400" />

@@ -86,7 +86,7 @@ import { compressImageForUpload } from '@/lib/frontend-defense';
 import { downloadFile, fetchBlob, getCOSUrlForElement, downloadViaProxy } from '@/lib/download';
 import { generateBezierPath } from '@/lib/bezier-path';
 import { getEffectiveSources, type SourceItem, getModelMaxLimits, getModelSupportedTypes } from '@/lib/effective-sources';
-import { ModelDetector } from '@/lib/model-utils';
+import { ModelDetector, getEffectiveQuality } from '@/lib/model-utils';
 import { useInteractionCanvas } from '@/hooks/useInteractionCanvas';
 // 【A 计划】乐观上传 Hook
 import { useOptimisticUpload, OptimisticUploadResult, BackgroundUploadResult } from '@/hooks/useOptimisticUpload';
@@ -4029,7 +4029,7 @@ function CanvasApp({ canvas, router }: { canvas: CanvasContextType; router: Retu
       resolution: selectedResolution,
       aspectRatio: selectedRatio,
       generationCount: selectedCount,
-      quality: selectedQuality,  // #522 T8Star GPT 品质参数
+      quality: getEffectiveQuality(effectiveModel, selectedQuality),  // #522 品质参数；#894 2.5系列白名单纠偏
       // 视频参数：仅视频模型时传递
       mode: isVideoModel ? 'video' : 'image',
       duration: isVideoModel ? selectedDuration : undefined,

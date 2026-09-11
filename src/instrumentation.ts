@@ -34,6 +34,20 @@ export async function register() {
       console.warn('[Instrumentation] 自动迁移异常（不阻塞启动）:', msg.substring(0, 200));
     }
 
+    // #894 GRS GPT-Image-2.5 系列模型迁移
+    try {
+      const { runAutoMigrate894 } = await import('./lib/auto-migrate-894');
+      const r894 = await runAutoMigrate894();
+      if (r894.success) {
+        console.log('[Instrumentation] #894 迁移成功: configId=' + r894.configId + ', models=' + (r894.models || []).join(','));
+      } else {
+        console.warn('[Instrumentation] #894 迁移失败（不阻塞启动）');
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn('[Instrumentation] #894 迁移异常（不阻塞启动）:', msg.substring(0, 200));
+    }
+
     // #821 展示区+轮播图种子数据
     try {
       const { checkSeedNeeded, runSeedShowcase } = await import('./lib/auto-seed-showcase');

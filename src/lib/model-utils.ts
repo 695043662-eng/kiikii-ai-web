@@ -663,3 +663,121 @@ export function getAudioDuration(file: File): Promise<number> {
     audio.src = URL.createObjectURL(file);
   });
 }
+
+/**
+ * #894 GRS GPT-Image-2.5 系列判断与品质工具
+ * - gpt-image-2.5:          仅 auto 品质，比例或 1K 像素（对标 gpt-image-2）
+ * - gpt-image-2.5-flare:    low/medium/high，仅 1-4K 像素（对标 gpt-image-2-vip）
+ * - gpt-image-2.5-sunburst: low/medium/high/xhigh/max，仅 1-4K 像素（对标 gpt-image-2-vip）
+ * 与后端 buildRequest（api-config.ts）的白名单纠偏保持一致
+ */
+export function isGptImage25NormalModel(modelId: string): boolean {
+  return modelId.trim().toLowerCase() === 'gpt-image-2.5';
+}
+
+export function isGptImage25FlareModel(modelId: string): boolean {
+  return modelId.trim().toLowerCase() === 'gpt-image-2.5-flare';
+}
+
+export function isGptImage25SunburstModel(modelId: string): boolean {
+  return modelId.trim().toLowerCase() === 'gpt-image-2.5-sunburst';
+}
+
+/** GRS GPT-Image 全家族（2.0 + 2.5 所有变体，不含 t8star 前缀） */
+export function isGrsGptImageFamily(modelId: string): boolean {
+  return modelId.includes('gpt-image-2');
+}
+
+/** 品质选项定义 */
+export interface QualityOption {
+  label: string;
+  value: string;
+  /** 右侧灰色小字说明（可选） */
+  desc?: string;
+}
+
+/** GPT-Image 全家族品质选项清单（按模型白名单） */
+const GPT_IMAGE_QUALITY_OPTIONS: Record<string, QualityOption[]> = {
+  flare: [
+    { label: '速度', value: 'low', desc: '最快出图' },
+    { label: '中等', value: 'medium', desc: '均衡' },
+    { label: '高清', value: 'high', desc: '最佳画质' },
+  ],
+  sunburst: [
+    { label: '速度', value: 'low', desc: '最快出图' },
+    { label: '中等', value: 'medium', desc: '均衡' },
+    { label: '高清', value: 'high', desc: '最佳画质' },
+    { label: '超高', value: 'xhigh', desc: '更高细节' },
+    { label: '极限', value: 'max', desc: '极致细节' },
+  ],
+  legacy: [
+    { label: '自动', value: 'auto', desc: '无需设置' },
+    { label: '高清', value: 'high', desc: '最佳画质' },
+    { label: '中等', value: 'medium', desc: '均衡' },
+    { label: '速度', value: 'low', desc: '最快出图' },
+  ],
+};
+
+/**
+ * 获取指定模型的品质选项列表
+ * - flare: 3 档（文档无 auto/xhigh/max）
+ * - sunburst: 5 档（文档无 auto）
+ * - 2.0 家族（gpt-image-2 / gpt-image-2-vip / t8star.gpt-image-2）: 4 档（保持历史行为）
+ */
+export function getGptImageQualityOptions(modelId: string): QualityOption[] {
+  if (isGptImage25FlareModel(modelId)) return GPT_IMAGE_QUALITY_OPTIONS.flare;
+  if (isGptImage25SunburstModel(modelId)) return GPT_IMAGE_QUALITY_OPTIONS.sunburst;
+  if (isGrsGptImageFamily(modelId) || modelId.startsWith('t8star.')) return GPT_IMAGE_QUALITY_OPTIONS.legacy;
+  return GPT_IMAGE_QUALITY_OPTIONS.legacy;
+}
+
+/**
+ * 品质白名单纠偏：返回该模型实际生效的品质值
+ * - gpt-image-2.5: 强制 auto
+ * - flare: 白名单 [low,medium,high]，越界回退 medium
+ * - sunburst: 白名单 [low,medium,high,xhigh,max]，越界回退 medium
+ * - 其他模型: 原值透传
+ * 【防幽灵状态】品质为全局共享状态，跨模型切换可能残留越界值（#677 教训）
+ */
+export function getEffectiveQuality(modelId: string, quality: string): string {
+  const q = (quality || '').trim().toLowerCase();
+  if (isGptImage25NormalModel(modelId)) return 'auto';
+  if (isGptImage25FlareModel(modelId)) {
+    return ['low', 'medium', 'high'].includes(q) ? q : 'medium';
+  }
+  if (isGptImage25SunburstModel(modelId)) {
+    return ['low', 'medium', 'high', 'xhigh', 'max'].includes(q) ? q : 'medium';
+  }
+  return q;
+}
+
+/** 品质值 → 中文标签 */
+export function qualityValueLabel(value: string): string {
+  switch ((value || '').trim().toLowerCase()) {
+    case 'auto': return '自动';
+    case 'low': return '速度';
+    case 'medium': return '中等';
+    case 'high': return '高清';
+    case 'xhigh': return '超高';
+    case 'max': return '极限';
+    default: return '自动';
+  }
+}
+
+/**
+ * GPT-Image 全家族是否显示品质选择按钮
+ * - t8star.* 前缀: 显示（历史行为）
+ * - gpt-image-2 家族: 显示，但 gpt-image-2.5 普通款（仅 auto）不显示
+ */
+export function showsGptImageQualityPicker(modelId: string): boolean {
+  if (!modelId.startsWith('t8star.') && !isGrsGptImageFamily(modelId)) return false;
+  return !isGptImage25NormalModel(modelId);
+}
+
+/* ---------------- 别名导出（供组件使用更短的名字，保持一致语义） ---------------- */
+/** 是否显示品质选择按钮（generate/page.tsx 用长名，其余组件用短名） */
+export const supportsQualityPicker = showsGptImageQualityPicker;
+/** 品质值 → 中文标签（短名别名） */
+export const qualityLabel = qualityValueLabel;
+/** 获取品质选项列表（短名别名） */
+export const getQualityOptions = getGptImageQualityOptions;

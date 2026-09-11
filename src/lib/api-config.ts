@@ -796,7 +796,8 @@ export function buildRequest(
   } else if (reqRatio === 'auto') {
     // 🔧 #auto GRS 新接口支持 aspectRatio=auto，直接透传
     // T8Star API 使用 size 参数（像素值），auto 需映射到 1024x1024
-    const isGRSModel = originalModelId === 'gpt-image-2' || originalModelId === 'gpt-image-2-vip';
+    // 🔧 #894 GRS GPT 全家族（gpt-image-2 / 2-vip / 2.5 / 2.5-flare / 2.5-sunburst）均以 'gpt-image-2' 开头
+    const isGRSModel = originalModelId.startsWith('gpt-image-2');
     if (isGRSModel) {
       finalApiPixels = 'auto'; // GRS 直接传 auto
       console.log('[buildRequest]', originalModelId, 'auto比例直接透传');
@@ -804,16 +805,18 @@ export function buildRequest(
       finalApiPixels = '1024x1024'; // T8Star auto 映射到默认像素
       console.log('[buildRequest]', originalModelId, 'auto比例映射到默认像素:', finalApiPixels);
     }
-  } else if (originalModelId === 'gpt-image-2') {
+  } else if (originalModelId === 'gpt-image-2' || originalModelId === 'gpt-image-2.5') {
     // 🔴 GRS 普通款：强制无视前端画质，全部降维到 1K
+    // 🔧 #894 gpt-image-2.5 与 2.0 行为一致：支持比例或 1K 像素值
     finalApiPixels = GPT_IMAGE_2_1K_MAP[reqRatio] || '1024x1024';
-    console.log('[buildRequest] gpt-image-2 (GRS普通版) 像素映射:', reqRatio, '→', finalApiPixels);
-  } else if (originalModelId === 'gpt-image-2-vip' || originalModelId === 't8star.gpt-image-2') {
-    // 🟢 VIP款 / T8Star：支持全量画质，精准查表
+    console.log('[buildRequest]', originalModelId, '(GRS普通版) 像素映射:', reqRatio, '→', finalApiPixels);
+  } else if (originalModelId === 'gpt-image-2-vip' || originalModelId === 't8star.gpt-image-2'
+          || originalModelId === 'gpt-image-2.5-flare' || originalModelId === 'gpt-image-2.5-sunburst') {
+    // 🟢 VIP款 / T8Star / #894 GRS 2.5 flare/sunburst：支持全量画质，精准查表
+    // 🔧 #894 文档明确 flare/sunburst 仅支持 1-4K 像素值（不支持比例字符串），复用 VIP 映射
+    // ⚠️ 注意：reqQuality 实为 resolution 分辨率档位（1K/2K/4K），并非画质 quality
     const ratioMap = GPT_IMAGE_2_VIP_MAP[reqRatio];
-    if (ratioMap) {
-      finalApiPixels = ratioMap[reqQuality] || ratioMap['1K'];
-    }
+    if (ratioMap) finalApiPixels = ratioMap[reqQuality] || ratioMap['1K'];
     console.log('[buildRequest]', originalModelId, '像素映射:', reqRatio, reqQuality, '→', finalApiPixels);
   } else {
     // 其他模型：保持原样
@@ -831,6 +834,29 @@ export function buildRequest(
   // ⚠️ 测试模式：不覆盖 quality，保持畸形参数
   if (!isTestMode && allVariables.quality === undefined) {
     allVariables.quality = 'auto';
+  }
+
+  // 🔧 #894 GRS 2.5 系列 quality 白名单纠偏（防前端幽灵状态残留，#677 教训）
+  // 文档规定：gpt-image-2.5 仅 auto；flare 仅 low/medium/high；sunburst 支持 low~max
+  // 品质状态为全局共享，用户在其他 GPT 模型选过的值可能残留，此处统一白名单兜底
+  if (!isTestMode) {
+    if (originalModelId === 'gpt-image-2.5') {
+      // 2.5 普通款仅支持 auto，强制归一
+      if (allVariables.quality !== 'auto') {
+        console.log(`[buildRequest] #894 gpt-image-2.5 quality 强制 auto (原值: ${allVariables.quality})`);
+        allVariables.quality = 'auto';
+      }
+    } else if (originalModelId === 'gpt-image-2.5-flare') {
+      if (!['low', 'medium', 'high'].includes(String(allVariables.quality))) {
+        console.log(`[buildRequest] #894 gpt-image-2.5-flare quality 纠偏为 medium (原值: ${allVariables.quality})`);
+        allVariables.quality = 'medium';
+      }
+    } else if (originalModelId === 'gpt-image-2.5-sunburst') {
+      if (!['low', 'medium', 'high', 'xhigh', 'max'].includes(String(allVariables.quality))) {
+        console.log(`[buildRequest] #894 gpt-image-2.5-sunburst quality 纠偏为 medium (原值: ${allVariables.quality})`);
+        allVariables.quality = 'medium';
+      }
+    }
   }
 
   // 🔧 #528 T8Star GPT-image-2 在 quality=auto/medium 时不支持 3:1/1:3 比例

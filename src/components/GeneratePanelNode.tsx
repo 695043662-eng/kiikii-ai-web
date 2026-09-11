@@ -9,7 +9,7 @@ import { downloadFile, getCOSUrlForElement, downloadViaProxy } from '@/lib/downl
 import CanvasRoseCurve from '@/components/canvas/CanvasRoseCurve';
 import { ModelModeSwitcher, type VideoMode, type Seedance2Mode, getHappyHorseModeParams, getSeedance2ModeParams, getT8SeedanceModeParams, isTopaisVeoModel, getTopaisModeParams, isTopaisHhModel as isTopaisHhModelFn, getTopaisHhModeParams, isTopaisSeedanceModel as isTopaisSeedanceModelFn, getTopaisSeedanceModeParams, isTopaisGeminiOmniModel as isTopaisGeminiOmniModelFn, getTopaisGeminiOmniModeParams, isMegaAiSeedanceModel as isMegaAiSeedanceModelFn, getMegaAiSeedanceModeParams, isTopaisMinimaxModel as isTopaisMinimaxModelFn, getTopaisMinimaxModeParams, getTopaisMinimaxRatioStates, formatRatioLabel, getLingyaVeoModeParams, getLingyaSoraModeParams, isTopaisKlingOmniModel as isTopaisKlingOmniModelFn, getTopaisKlingOmniModeParams } from '@/components/ModelModeSwitcher';
 import { getEffectiveSources, getMaterialTypeLimits, getModelSupportedTypes, getModelMaxLimits, type SourceItem } from '@/lib/effective-sources';
-import { ModelDetector, MODEL_MODE_CONSTRAINTS, isModeSupportedByFamily } from '@/lib/model-utils';
+import { ModelDetector, MODEL_MODE_CONSTRAINTS, isModeSupportedByFamily, supportsQualityPicker, getEffectiveQuality, qualityLabel, getQualityOptions } from '@/lib/model-utils';
 import { useFakeProgress } from '@/hooks/useFakeProgress';
 import AudioUploader from '@/components/AudioUploader';
 import { toast } from 'sonner';
@@ -2502,7 +2502,7 @@ const GeneratePanelNodeComponent = ({
         generationCount: localCount,
         images: referenceImages,
         isUrls: isUrls,
-        quality: localQuality,  // #523 T8Star 品质参数
+        quality: getEffectiveQuality(localModel, localQuality),  // #523 品质参数；#894 2.5系列白名单纠偏
         
         // 👑 #418 修复：注入缺失的 mode 路由参数
         mode: 'image',
@@ -6486,8 +6486,8 @@ const GeneratePanelNodeComponent = ({
               )}
             </div>
             
-            {/* #523 T8Star/GRS GPT 模型品质按钮 */}
-            {(localModel?.startsWith('t8star.') || localModel === 'gpt-image-2-vip' || localModel === 'gpt-image-2') && (
+            {/* #523 T8Star/GRS GPT 模型品质按钮；#894 gpt-image-2.5 仅 auto 不显示 */}
+            {localModel && supportsQualityPicker(localModel) && (
               <div style={{ position: 'relative' }}>
                 <button 
                   ref={qualityButtonRef}
@@ -6525,7 +6525,7 @@ const GeneratePanelNodeComponent = ({
                     setLocalCountPicker(false);
                   }}
                 >
-                  <span>品质:{localQuality === 'low' ? '速度' : localQuality === 'medium' ? '中' : localQuality === 'high' ? '高' : '自动'}</span>
+                  <span>品质:{qualityLabel(getEffectiveQuality(localModel, localQuality))}</span>
                   <span style={{ fontSize: '14px', opacity: 0.6 }}>
                     {localQualityPicker ? '^' : '˅'}
                   </span>
@@ -6553,12 +6553,7 @@ const GeneratePanelNodeComponent = ({
                       <span style={{ fontSize: '14px', fontWeight: 600, color: '#f4f4f5' }}>品质</span>
                     </div>
                     <div style={{ padding: '6px' }}>
-                      {[
-                        { value: 'auto', label: '自动', desc: '默认' },
-                        { value: 'high', label: '高', desc: '细节多' },
-                        { value: 'medium', label: '中', desc: '平衡' },
-                        { value: 'low', label: '速度', desc: '最快' },
-                      ].map((q) => {
+                      {getQualityOptions(localModel).map((q) => {
                         const isSelected = localQuality === q.value;
                         return (
                           <button
@@ -6584,7 +6579,7 @@ const GeneratePanelNodeComponent = ({
                             }}
                           >
                             <span>{q.label}</span>
-                            <span style={{ color: isSelected ? '#d4d4d8' : '#a1a1aa', fontSize: '12px', width: '36px', textAlign: 'right', display: 'inline-block' }}>{q.desc}</span>
+                            <span style={{ color: isSelected ? '#d4d4d8' : '#a1a1aa', fontSize: '12px', width: '36px', textAlign: 'right', display: 'inline-block' }}>{isSelected ? '已选' : ''}</span>
                             {isSelected && <span style={{ color: '#22c55e', fontSize: '12px', marginLeft: '4px' }}>✓</span>}
                           </button>
                         );

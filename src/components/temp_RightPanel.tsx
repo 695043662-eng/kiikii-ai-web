@@ -34,7 +34,7 @@ import { toast } from 'sonner';
 import { ModelModeSwitcher, type VideoModelMode, type Seedance2Mode, getHappyHorseModeParams, getSeedance2ModeParams, getT8SeedanceModeParams, getHappyHorseMaxRefImages, isTopaisVeoModel, getTopaisModeParams, isTopaisHhModel, getTopaisHhModeParams, isTopaisGeminiOmniModel, getTopaisGeminiOmniModeParams, isMegaAiSeedanceModel as isMegaAiSeedanceModelFn, getMegaAiSeedanceModeParams, isTopaisMinimaxModel as isTopaisMinimaxModelFn, getTopaisMinimaxModeParams, getTopaisMinimaxRatioStates, formatRatioLabel, getLingyaVeoModeParams, getLingyaSoraModeParams, isTopaisKlingOmniModel as isTopaisKlingOmniModelFn, getTopaisKlingOmniModeParams } from '@/components/ModelModeSwitcher';
 import AudioUploader, { type AudioRef } from '@/components/AudioUploader';
 import { getMaterialTypeLimits, getModelSupportedTypes, getModelMaxLimits } from '@/lib/effective-sources';
-import { ModelDetector } from '@/lib/model-utils';
+import { ModelDetector, supportsQualityPicker, getEffectiveQuality, qualityLabel, getQualityOptions } from '@/lib/model-utils';
 import { safeJsonResponse } from '@/lib/safe-json';
 
 // 模型 logo 映射（与 GeneratePanelNode 一致）
@@ -1557,13 +1557,13 @@ const RightPanel: React.FC<RightPanelProps> = (props) => {
               {isResolutionBanned(selectedResolution) && (() => { const exp = currentModelBannedResolutions[selectedResolution.toUpperCase()]; if (!exp) return ' ⚠️'; const remain = Math.max(0, Math.ceil((exp - Date.now()) / 60000)); return remain > 0 ? ` ⚠️${remain}分钟` : ' ⚠️即将解锁'; })()}
             </button>
             )}
-            {/* T8Star/GRS GPT 模型单独显示品质 */}
-            {(selectedModel?.startsWith('t8star.') || selectedModel === 'gpt-image-2-vip' || selectedModel === 'gpt-image-2') && (
+            {/* T8Star/GRS GPT 模型单独显示品质；#894 gpt-image-2.5 仅 auto 不显示 */}
+            {selectedModel && supportsQualityPicker(selectedModel) && (
               <button
                 className="px-2 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-gray-700 dark:text-gray-200 transition-colors whitespace-nowrap flex items-center gap-1"
                 onClick={() => { setShowQualityPicker(!showQualityPicker); setShowRatioPicker(false); setShowResolutionPicker(false); setShowCountPicker(false); }}
               >
-                {selectedQuality === 'low' ? '速度' : selectedQuality === 'medium' ? '中' : selectedQuality === 'high' ? '高' : '自动'}
+                {qualityLabel(getEffectiveQuality(selectedModel, selectedQuality))}
                 <span style={{ fontSize: '10px', opacity: 0.5 }}>˅</span>
               </button>
             )}
@@ -2026,8 +2026,8 @@ const RightPanel: React.FC<RightPanelProps> = (props) => {
         </div>
       )}
 
-      {/* 品质选择弹窗 - T8Star GPT 模型专用 */}
-      {showQualityPicker && (
+      {/* 品质选择弹窗 - T8Star/GRS GPT 模型专用；#894 按模型白名单显示选项 */}
+      {showQualityPicker && selectedModel && (
         <div className="fixed inset-0 z-50 flex items-end justify-end p-4" onClick={() => setShowQualityPicker(false)}>
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-[240px] mb-20 mr-2" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700">
@@ -2037,12 +2037,7 @@ const RightPanel: React.FC<RightPanelProps> = (props) => {
               </button>
             </div>
             <div className="p-2 flex flex-col gap-1">
-              {[
-                { value: 'auto', label: '自动', desc: '默认' },
-                { value: 'high', label: '高', desc: '细节多' },
-                { value: 'medium', label: '中', desc: '平衡' },
-                { value: 'low', label: '速度', desc: '最快' },
-              ].map((q) => (
+              {getQualityOptions(selectedModel).map((q) => (
                 <button
                   key={q.value}
                   onClick={() => {

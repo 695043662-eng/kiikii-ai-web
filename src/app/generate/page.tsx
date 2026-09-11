@@ -33,7 +33,7 @@ import { downloadFile, downloadViaProxy } from '@/lib/download';
 // 【A 计划】乐观上传 Hook
 import { useOptimisticUpload, OptimisticUploadResult, BackgroundUploadResult, waitForPendingUploads } from '@/hooks/useOptimisticUpload';
 import { getModelSupportedTypes } from '@/lib/effective-sources';
-import { ModelDetector } from '@/lib/model-utils';
+import { ModelDetector, showsGptImageQualityPicker, getGptImageQualityOptions, getEffectiveQuality, qualityValueLabel } from '@/lib/model-utils';
 
 // 辅助函数：处理 imageItems 和 imageUrls，返回正确的状态更新
 function processImageItemsWithDeletedFilter(
@@ -568,7 +568,7 @@ export default function SingleGeneratePage() {
   const [showRatioPicker, setShowRatioPicker] = useState(false);
   const [showCountPicker, setShowCountPicker] = useState(false);
   const [showQualityPicker, setShowQualityPicker] = useState(false);
-  const [selectedQuality, setSelectedQuality] = useState<'low' | 'medium' | 'high' | 'auto'>('auto');
+  const [selectedQuality, setSelectedQuality] = useState<'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'auto'>('auto');
   const [qualityButtonLeft, setQualityButtonLeft] = useState(96);
   const [qualityButtonBottom, setQualityButtonBottom] = useState(0);
   const qualityButtonRef = useRef<HTMLButtonElement>(null);
@@ -2091,7 +2091,7 @@ export default function SingleGeneratePage() {
       isUrls: finalIsUrls,
       md5Hashes: finalReferenceImageMd5s,  // #239 使用过滤后的 MD5
       referenceImageKeys: referenceImageKeys.filter((k: string) => k && k.length > 0),  // #840 传参考图 keys
-      quality: (model.startsWith('t8star.') || model === 'gpt-image-2-vip' || model === 'gpt-image-2') ? selectedQuality : undefined,  // #522 T8Star/GRS 品质参数
+      quality: (model.startsWith('t8star.') || model.includes('gpt-image-2')) ? getEffectiveQuality(model, selectedQuality) : undefined,  // #522/#894 T8Star/GRS 品质参数（2.5 白名单纠偏）
 
       // 进度回调：更新任务卡片
       onProgress: () => {
@@ -2679,7 +2679,7 @@ export default function SingleGeneratePage() {
         isUrls: refIsUrls,
         md5Hashes: originalRefMd5s,
         referenceImageKeys: originalRefKeys.filter((k: string) => k && k.length > 0),  // #840 传参考图 keys
-        quality: (task.params.model.startsWith('t8star.') || task.params.model === 'gpt-image-2-vip' || task.params.model === 'gpt-image-2') ? selectedQuality : undefined,  // #522 T8Star/GRS 品质参数
+        quality: (task.params.model.startsWith('t8star.') || task.params.model.includes('gpt-image-2')) ? getEffectiveQuality(task.params.model, selectedQuality) : undefined,  // #522/#894 T8Star/GRS 品质参数（2.5 白名单纠偏）
 
         // 图片完成回调：更新任务卡片
         onImageReceived: (data) => {
@@ -3023,10 +3023,10 @@ export default function SingleGeneratePage() {
                 style={{ transform: 'scale(1.1)', transformOrigin: 'bottom left' }}
                 onClick={() => setShowResolutionPicker(!showResolutionPicker)}
               >
-                {(model.startsWith('t8star.') || model === 'gpt-image-2-vip' || model === 'gpt-image-2') ? resolution : `分辨率: ${resolution}`}
+                {(model.startsWith('t8star.') || model.includes('gpt-image-2')) ? resolution : `分辨率: ${resolution}`}
               </button>
-              {/* T8Star/GRS GPT 模型显示品质按钮 */}
-              {(model.startsWith('t8star.') || model === 'gpt-image-2-vip' || model === 'gpt-image-2') && (
+              {/* T8Star/GRS GPT 模型显示品质按钮（gpt-image-2.5 仅 auto 不显示，#894） */}
+              {showsGptImageQualityPicker(model) && (
                 <button 
                   ref={qualityButtonRef}
                   className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 rounded-lg text-gray-700 dark:text-gray-300 transition-colors"
@@ -3040,7 +3040,7 @@ export default function SingleGeneratePage() {
                     setShowQualityPicker(!showQualityPicker);
                   }}
                 >
-                  品质: {selectedQuality === 'low' ? '速度' : selectedQuality === 'medium' ? '中' : selectedQuality === 'high' ? '高' : '自动'}
+                  品质: {qualityValueLabel(getEffectiveQuality(model, selectedQuality))}
                 </button>
               )}
               <button 
@@ -4027,7 +4027,7 @@ export default function SingleGeneratePage() {
       )}
 
       {/* 品质选择弹窗 - T8Star/GRS GPT 模型专用 */}
-      {showQualityPicker && (model.startsWith('t8star.') || model === 'gpt-image-2-vip' || model === 'gpt-image-2') && (
+      {showQualityPicker && showsGptImageQualityPicker(model) && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setShowQualityPicker(false)} />
           <div className="fixed z-50" style={{ left: qualityButtonLeft, bottom: qualityButtonBottom }}>
@@ -4042,16 +4042,11 @@ export default function SingleGeneratePage() {
                 </button>
               </div>
               <div className="p-2 flex flex-col gap-1">
-                {[
-                  { value: 'auto', label: '自动', desc: '默认' },
-                  { value: 'high', label: '高', desc: '细节多' },
-                  { value: 'medium', label: '中', desc: '平衡' },
-                  { value: 'low', label: '速度', desc: '最快' },
-                ].map((option) => (
+                {getGptImageQualityOptions(model).map((option) => (
                   <button
                     key={option.value}
                     onClick={() => {
-                      setSelectedQuality(option.value as 'low' | 'medium' | 'high' | 'auto');
+                      setSelectedQuality(option.value as 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'auto');
                       setShowQualityPicker(false);
                     }}
                     className={`w-full py-2.5 px-3 rounded-lg text-sm transition-colors flex items-center justify-between ${
@@ -4061,7 +4056,7 @@ export default function SingleGeneratePage() {
                     }`}
                   >
                     <span className="font-medium">{option.label}</span>
-                    <span className={`text-xs w-12 text-right ${selectedQuality === option.value ? 'text-gray-300 dark:text-gray-300' : 'text-gray-700 dark:text-gray-300'}`}>{option.desc}</span>
+                    <span className={`text-xs w-12 text-right ${selectedQuality === option.value ? 'text-gray-300 dark:text-gray-300' : 'text-gray-700 dark:text-gray-300'}`}>{selectedQuality === option.value ? '已选' : ''}</span>
                   </button>
                 ))}
               </div>

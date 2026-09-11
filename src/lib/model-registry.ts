@@ -124,6 +124,32 @@ export const SYSTEM_MODELS_REGISTRY: ModelConfigItem[] = [
     testVariables: { ...IMAGE_VIP_TEST_VARIABLES },
   },
 
+  // ===== 图片模型 - GRS GPT-Image-2.5 系列（#894 新接口 /v1/api/generate） =====
+  {
+    id: 'gpt-image-2.5',
+    name: 'GPT-Image-2.5 (GRS)',
+    provider: 'GRS',
+    serviceType: 'image_generation',
+    parameters: '1K | 各种比例 | quality: auto',
+    testVariables: { ...IMAGE_VIP_TEST_VARIABLES },
+  },
+  {
+    id: 'gpt-image-2.5-flare',
+    name: 'GPT-Image-2.5 Flare (GRS)',
+    provider: 'GRS',
+    serviceType: 'image_generation',
+    parameters: '1K / 2K / 4K | 各种比例 | quality: low/medium/high',
+    testVariables: { ...IMAGE_VIP_TEST_VARIABLES },
+  },
+  {
+    id: 'gpt-image-2.5-sunburst',
+    name: 'GPT-Image-2.5 Sunburst (GRS)',
+    provider: 'GRS',
+    serviceType: 'image_generation',
+    parameters: '1K / 2K / 4K | 各种比例 | quality: low~max',
+    testVariables: { ...IMAGE_VIP_TEST_VARIABLES },
+  },
+
   // ===== 图片模型 - Banana 系列 =====
   {
     id: 'nano-banana',

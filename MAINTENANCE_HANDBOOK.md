@@ -6,6 +6,46 @@
 
 ---
 
+## #895 新增 GRS GPT-Image-2.5 系列（3 模型：2.5 / 2.5-flare / 2.5-sunburst）
+
+**状态**: ✅ 已完成 | **日期**: 2026-09-11
+
+**需求**:
+GRS 服务商发布 GPT-Image-2.5 系列文档（新接口 `/v1/api/generate`），要求按 2.0 系列（gpt-image-2 / gpt-image-2-vip）的既有配置模式落地 3 个新模型。
+
+**2.5 与 2.0 对标差异分析（落地依据）**:
+
+| 维度 | gpt-image-2.5（对标 gpt-image-2） | gpt-image-2.5-flare / sunburst（对标 gpt-image-2-vip） |
+|------|------|------|
+| 比例参数 | 比例或 1K 像素 → 复用 GPT_IMAGE_2_1K_MAP 强制 1K | 仅 1-4K 像素，不支持比例 → 复用 GPT_IMAGE_2_VIP_MAP |
+| quality | 仅 auto（文档）→ 后端强制 auto + 前端不显示品质按钮 | flare: low/medium/high；sunburst: low/medium/high/xhigh/max → 白名单弹窗 + 后端纠偏 |
+| 接口 | 新接口 /v1/api/generate（2.0 用旧接口 /v1/draw/completions）| 同左，新建独立 api_config（id=34） |
+| 响应 | `{status: succeeded/running/failed/violation, results:[{url}], progress}` — parseTerminalResponseFromText 原生支持，零改动 | 同左 |
+
+**关键坑（⚠️ reqQuality 变量名的误导）**:
+buildRequest 中 `const reqQuality = allVariables.resolution || '1K'` —— **reqQuality 实际是分辨率档位（1K/2K/4K），不是 quality**！VIP 映射 `ratioMap[reqQuality]` 是按分辨率查表。初看以为是"按 quality 查表的既有 Bug"，验证脚本（含 2.0-vip 4K 回归用例）证明 2.0 线上行为正确，**未改动原版映射逻辑**，仅原样复用。
+
+**修复清单**:
+
+| 层 | 文件 | 改动 |
+|----|------|------|
+| 后端请求构建 | src/lib/api-config.ts | ① auto 透传 isGRSModel 扩为 startsWith('gpt-image-2')（覆盖 2.5 全家族）② 新增 gpt-image-2.5 → GPT_IMAGE_2_1K_MAP 强制 1K 分支 ③ 新增 flare/sunburst → GPT_IMAGE_2_VIP_MAP 分支 ④ quality 白名单纠偏（2.5→auto；flare 非法值→medium；sunburst 非法值→medium，防幽灵状态 #677 教训） |
+| 模型注册 | src/lib/model-registry.ts | 3 个新模型注册（管理后台批量测试用） |
+| 数据库 | src/lib/auto-migrate-894.ts | 新建 api_config id=34（新API /v1/api/generate，api_key 复用 GRS）+ 3 条 api_models（2.5: 1K/10积分；flare/sunburst: 1K/15,2K/17,4K/18）；PostgREST 幂等（⚠️ findConfig 查询特殊字符必须先 encodeURIComponent 再整体 encode，否则重跑重复建 config） |
+| 启动挂载 | src/instrumentation.ts | 挂载 run894Migration |
+| 共享工具 | src/lib/model-utils.ts | 新增 showsGptImageQualityPicker（2.5 普通款不显示品质按钮）/ getGptImageQualityOptions（按模型白名单）/ getEffectiveQuality（发送前纠偏，与后端一致）/ qualityValueLabel（xhigh→超高、max→极限）+ 别名导出 |
+| 生图页 | src/app/generate/page.tsx | selectedQuality 类型加 xhigh/max；2 处 quality 传参走 getEffectiveQuality；品质按钮/弹窗/文本全部按模型白名单 |
+| 画布面板 | src/components/GeneratePanelNode.tsx | quality 传参 + 品质按钮/弹窗按模型白名单 |
+| 对话框 | canvas/page.tsx + temp_RightPanel.tsx | 同上 |
+| 验证 | scripts/verify-gpt-image-25-build.ts | buildRequest 直测 18 用例（含 2.0-vip 4K/t8star 2K 回归 + 1:3/3:1 特殊比例防 #528 回归）全通过 |
+
+**教训**:
+1. 变量名 `reqQuality` 名不副实（实为 resolution），改此类映射逻辑前必须用回归用例证实，不能凭变量名"脑补"Bug
+2. PostgREST 查询含空格/括号/中文的字符串条件时，编码顺序错了会导致幂等查重失效、重复建记录
+3. 新模型接入必须同时考虑"品质状态是全局共享的"——切换模型时幽灵品质值会残留，后端白名单纠偏是最后一道防线
+
+---
+
 ## #894 铁血封杀：彻底焊死全站未登录用户的上传入口，100%绝对拦截
 
 **状态**: ✅ 已修复 | **日期**: 2026-08-20

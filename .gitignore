@@ -107,3 +107,7 @@ Desktop.ini
 # Preview files
 .preview
 .codegraph
+
+# Coze IDE renderer dumps (平台渲染器日志转储，防误提交)
+assets/CozeHtmlEditorRenderer*
+*.loaded.txt

@@ -6,6 +6,37 @@
 
 ---
 
+## #897 CAS 409 冲突弹窗死循环（跨 Tab 登出误报 → 清空画布 → 强制保存空数据）
+
+**状态**: ✅ 已修复 | **日期**: 2026-09-12
+
+### 症状
+- 画布页反复弹出"云端数据已被其他会话更新，等待用户决定"（CAS 409 冲突弹窗），无限循环
+- 日志序列：`云端加载成功 → #890 账号切换 xxx → null（无人登出！）→ 清空 9 个敏感 Key → 最大等待强制保存 → autosave 409`
+
+### 根因（四级事故链）
+1. **跨 Tab 登出误报**：`registerCrossTabAuthSync` 的 `onOtherTabLogout` 收到 storage 事件即立即 `setUserId(null)` + `clearSensitiveLocalStorage()`，**零复核**。沙箱同源多上下文（IDE 内嵌预览 iframe + 浏览器直开 Tab）中，任一上下文的初始化清理（`removeAuthSignal`）都会让其他上下文误判为"登出"
+2. **#890 账号切换监听**（CanvasContext + AIGeneratorContext）看到 `userId → null` → 清空画布 + 清空敏感 localStorage
+3. **#887 maxWait 强制保存**在清空后立刻触发，且 `userIdRef/isLoggedInRef` 用 useEffect 同步（时序缝隙：ref 还没跟上新状态）→ **空画布带旧 CAS 时间戳落库请求** → 409
+4. **CAS 409 弹窗无去重** → 弹窗未决期间二次 409 再弹，HMR/重试后继续弹 → 用户感知"一直提示合并"
+
+### 修复（五道防线）
+| 层 | 文件 | 修复 |
+|----|------|------|
+| 误报源 | AIGeneratorContext.tsx | onOtherTabLogout 延迟 800ms 复核 `/api/user/info`，会话仍有效则忽略误报，确认失效才登出 |
+| 状态时序 | useAutoSave.ts | userIdRef/isLoggedInRef 从 useEffect 改为**渲染期同步赋值**，杜绝 doSave 读到过期身份 |
+| 空数据保护 | useAutoSave.ts | doSave 拒绝"上次快照非空、本次突然为空"的保存（#890 异常清空链无法污染云端） |
+| 弹窗去重 | useAutoSave.ts | CAS 409 弹窗 5 秒去重窗口（casDialogLastFiredRef），弹窗未决期间不重复触发 |
+| 纵深防御 | autosave/route.ts | 服务端解析传入 elements 数量，**空画布覆盖非空云端 → 409 拒绝**（lz-string 解压支持） |
+
+### 关键教训
+1. **storage 跨 Tab 事件 ≠ 真实登出**：同源 iframe/多 Tab 下 storage 事件是噪声源，任何"登出/登入"同步必须复核会话后再执行
+2. **渲染期同步 ref**：身份类 ref（userId/isLoggedIn）在异步保存回调中消费时，必须渲染期同步赋值，useEffect 同步存在一帧时序缝隙
+3. **异常清空 ≠ 用户清空**：账号切换清空是"等待态"，绝不能触发自动保存（空数据覆盖是数据丢失事故）
+4. **重复弹窗必须在触发源头去重**，而不是在 UI 层弹窗组件去重
+
+---
+
 ## #895 新增 GRS GPT-Image-2.5 系列（3 模型：2.5 / 2.5-flare / 2.5-sunburst）
 
 **状态**: ✅ 已完成 | **日期**: 2026-09-11

@@ -147,15 +147,14 @@ export function useAutoSave(options: UseAutoSaveOptions): UseAutoSaveReturn {
   const saveStatusRef = useRef(saveStatus);
   const pendingSaveRef = useRef(false); // 竞态保护：保存期间有新变更时标记
   const cloudUpdatedAtRef = useRef<string | null>(null); // #887 弊端3：CAS 乐观锁，记录云端 updated_at
+  const casDialogLastFiredRef = useRef<number>(0); // #896：CAS 弹窗去重（弹窗未决期间不重复弹）
 
-  // 同步 Refs
-  useEffect(() => {
-    userIdRef.current = userId;
-  }, [userId]);
-
-  useEffect(() => {
-    isLoggedInRef.current = isLoggedIn;
-  }, [isLoggedIn]);
+  // #896 关键修复：渲染期【同步】赋值 Refs（原 useEffect 异步同步存在时序间隙）
+  // 事故链：onOtherTabLogout 将 userId/isLoggedIn 置 null → React 渲染前 maxWait 计时器抢先触发
+  // 强制保存 → Ref 仍持旧值 → 空画布被推上云端 → 409 CAS 冲突弹窗循环
+  // 渲染期同步赋值（幂等操作）确保 doSave 在任何计时器回调中都能立即看到最新身份状态
+  userIdRef.current = userId;
+  isLoggedInRef.current = isLoggedIn;
 
   useEffect(() => {
     saveStatusRef.current = saveStatus;
@@ -186,6 +185,18 @@ export function useAutoSave(options: UseAutoSaveOptions): UseAutoSaveReturn {
       return false;
     }
 
+    // 🛡️ #896 救命数据保护：检测异常清空（账号切换原子性重置/状态机 Bug 导致的瞬间清空）
+    // 上一次成功保存的快照非空，而本次快照突然为空 → 极大概率是 #890 账号切换清空链路
+    // 此时绝不能把空画布写上云端（唯一云端备份会被清空！），直接拒绝落库
+    const snapshot = getCanvasSnapshot();
+    const snapshotJson = JSON.stringify(snapshot);
+    const snapshotElementCount = Array.isArray(snapshot?.elements) ? snapshot.elements.length : 0;
+    if (snapshotElementCount === 0 && lastSnapshotRef.current && lastSnapshotRef.current !== '[]' && lastSnapshotRef.current !== '') {
+      console.warn('[AutoSave] #896 检测到画布被异常清空（上一快照非空 → 本次为空），拒绝保存以保护云端数据');
+      return false;
+    }
+    void snapshotJson;
+
     if (isSavingRef.current) {
       // 🛡️ 竞态保护：保存期间又有新变更，标记 pending 待重试
       // 防止"旧数据覆盖新数据"的 Lost Update 问题
@@ -198,8 +209,8 @@ export function useAutoSave(options: UseAutoSaveOptions): UseAutoSaveReturn {
     setSaveStatus('saving');
 
     try {
-      const snapshot = getCanvasSnapshot();
-      const rawJson = JSON.stringify(snapshot);
+      // 复用上方已序列化的快照，避免大画布二次 JSON.stringify 开销
+      const rawJson = snapshotJson;
       // #887 弊端1: 压缩画布JSON，防止大JSON打满数据库和网络带宽
       const compressed = compressToBase64(rawJson);
       // #887 弊端3: 乐观锁(CAS)，防止多设备/多标签页旧覆盖新
@@ -228,11 +239,18 @@ export function useAutoSave(options: UseAutoSaveOptions): UseAutoSaveReturn {
         }
 
         if (onCasConflict && conflictData.canvas_data) {
-          // 由上层弹窗让用户决定是否加载云端数据
-          onCasConflict({
-            canvas_data: conflictData.canvas_data,
-            server_updated_at: conflictData.server_updated_at,
-          });
+          // 🛡️ #896 弹窗去重：弹窗未决期间（5s 内）不重复触发，防止弹窗轰炸
+          const now = Date.now();
+          if (now - casDialogLastFiredRef.current < 5000) {
+            console.warn('[AutoSave] #896 CAS 弹窗已打开（5s 内），跳过重复弹窗，仅同步云端时间戳');
+          } else {
+            casDialogLastFiredRef.current = now;
+            // 由上层弹窗让用户决定是否加载云端数据
+            onCasConflict({
+              canvas_data: conflictData.canvas_data,
+              server_updated_at: conflictData.server_updated_at,
+            });
+          }
         } else if (conflictData.canvas_data) {
           // 兜底：如果没有提供 onCasConflict 回调（不应发生），仍记录警告但不覆盖
           console.error('[AutoSave] CAS冲突但无 onCasConflict 回调，数据未覆盖（安全策略）');

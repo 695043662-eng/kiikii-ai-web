@@ -816,15 +816,39 @@ export function AIGeneratorProvider({ children }: { children: React.ReactNode })
   useEffect(() => {
     const cleanup = registerCrossTabAuthSync({
       onOtherTabLogout: () => {
-        // 其他 Tab 登出 → 当前 Tab 也要清空+弹窗
-        setIsLoggedIn(false);
-        setAuthChecked(true);
-        setMessages([]);
-        setUserId(null);
-        setCredits(0);
-        clearSensitiveLocalStorage();
-        // 派发 openLogin 让当前页面打开 LoginModal
-        window.dispatchEvent(new CustomEvent('openLogin'));
+        // 🛡️ #896 防误杀：storage 事件可能是其他 Tab 初始化/抖动时的瞬时清理（如同源预览 iframe 并存），
+        // 不立即登出——延迟 800ms 复核真实会话，确认失效才执行登出链，彻底切断"CAS 弹窗循环"的触发源
+        console.log('[AIGenerator] 收到跨Tab登出信号，#896 复核会话后再决定是否登出');
+        setTimeout(async () => {
+          try {
+            const res = await fetch('/api/user/info', { credentials: 'include' });
+            if (res.ok) {
+              const data = await res.json();
+              // 复核通过：会话仍然有效 → 判定为误报，恢复登录态并刷新用户信息
+              if (data?.success && data?.user?.id) {
+                console.log('[AIGenerator] #896 复核通过（会话仍有效），忽略本次跨Tab登出误报');
+                setIsLoggedIn(true);
+                setAuthChecked(true);
+                setUserId(data.user.id);
+                return;
+              }
+            }
+          } catch {
+            // 网络异常时不武断登出，保守跳过本次信号
+            console.warn('[AIGenerator] #896 复核网络异常，保守跳过本次跨Tab登出信号');
+            return;
+          }
+          // 复核确认会话失效 → 执行真实登出链
+          console.log('[AIGenerator] #896 复核确认会话已失效，执行跨Tab同步登出');
+          setIsLoggedIn(false);
+          setAuthChecked(true);
+          setMessages([]);
+          setUserId(null);
+          setCredits(0);
+          clearSensitiveLocalStorage();
+          // 派发 openLogin 让当前页面打开 LoginModal
+          window.dispatchEvent(new CustomEvent('openLogin'));
+        }, 800);
       },
       onOtherTabLogin: (newUserId: string) => {
         // 其他 Tab 登录了新账号 → 当前 Tab 刷新用户信息（自动同步）

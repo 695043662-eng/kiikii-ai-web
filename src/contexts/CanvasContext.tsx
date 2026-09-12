@@ -810,6 +810,11 @@ export function CanvasProvider({ children }: { children: React.ReactNode }) {
     }
   }, [dispatch]);
 
+  // 🛡️ #898 主动清空标识：用户主动删除全部元素（Ctrl+A 全选后 Delete / 删除最后一个元素）时置 true，
+  // useAutoSave 看到标志后放行空保存并在 payload 携带 is_intentional_clear（服务端据此放行覆盖云端），一次性消费用后即焚。
+  // #890 账号切换的 SET_ELEMENTS [] 清空【不走此标志】，仍被前后端空数据保护双防线拦截。
+  const intentionalClearRef = useRef(false);
+
   // 云端自动保存 Hook（防抖 5 秒）
   const {
     saveStatus: cloudSaveStatus,
@@ -819,6 +824,7 @@ export function CanvasProvider({ children }: { children: React.ReactNode }) {
   } = useAutoSave({
     userId: realUserId, // #889 修复：使用真实用户ID，实现云端账号绑定
     isLoggedIn: realIsLoggedIn, // #889 修复：使用真实登录状态
+    intentionalClearRef, // #898 主动清空放行：用户主动删空画布时可落库清空云端（一次性标志）
     getCanvasSnapshot: () => {
       const currentState = stateRef.current;
       // #Bug2-fix: 云端快照剥离 imageUrl/providerUrl，只保留 imageKey
@@ -1397,8 +1403,13 @@ export function CanvasProvider({ children }: { children: React.ReactNode }) {
   // #289 修复：删除后立即保存，防止刷新后恢复
   // #438 修复：删除元素时释放 blob URL，防止内存泄漏
   const deleteElement = useCallback((id: string) => {
+    // 🛡️ #898：删除的是画布上最后一个元素 → 等同用户主动清空，打标放行空保存
+    const elementsBefore = stateRef.current.elements;
+    if (elementsBefore.length === 1 && elementsBefore[0]?.id === id) {
+      intentionalClearRef.current = true;
+    }
     // 释放 blob URL
-    const element = stateRef.current.elements.find(el => el.id === id);
+    const element = elementsBefore.find(el => el.id === id);
     if (element?.imageUrl?.startsWith('blob:')) {
       URL.revokeObjectURL(element.imageUrl);
     }
@@ -1416,6 +1427,10 @@ export function CanvasProvider({ children }: { children: React.ReactNode }) {
   // #438 修复：删除元素时释放 blob URL，防止内存泄漏
   const deleteSelected = useCallback(() => {
     if (state.selectedIds.length > 0) {
+      // 🛡️ #898：选中数覆盖画布全部元素（典型场景：Ctrl+A 全选后按 Delete）→ 等同用户主动清空，打标放行空保存
+      if (state.selectedIds.length >= stateRef.current.elements.length) {
+        intentionalClearRef.current = true;
+      }
       // 释放所有选中元素的 blob URL
       state.selectedIds.forEach(id => {
         const element = stateRef.current.elements.find(el => el.id === id);

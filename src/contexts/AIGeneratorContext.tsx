@@ -819,6 +819,32 @@ export function AIGeneratorProvider({ children }: { children: React.ReactNode })
         // 🛡️ #896 防误杀：storage 事件可能是其他 Tab 初始化/抖动时的瞬时清理（如同源预览 iframe 并存），
         // 不立即登出——延迟 800ms 复核真实会话，确认失效才执行登出链，彻底切断"CAS 弹窗循环"的触发源
         console.log('[AIGenerator] 收到跨Tab登出信号，#896 复核会话后再决定是否登出');
+        // 🛡️ #898 军师建议：多 Tab 复核风暴防抖——复核结果写入独立 localStorage Key 跨 Tab 共享（3 秒窗口）。
+        // 5 个 Tab 同时误报时，仅首个 Tab 发起 /api/user/info，其余 Tab 直接采信结果，请求数 N → 1。
+        // 注意：本 Key 独立于 auth_signal，不会触发 registerCrossTabAuthSync 的 storage 监听造成误报。
+        const REVIEW_KEY = 'kiikii_session_review';
+        const REVIEW_TTL_MS = 3000;
+        try {
+          const cached = JSON.parse(localStorage.getItem(REVIEW_KEY) || 'null') as { result: 'valid' | 'invalid'; ts: number } | null;
+          if (cached && (cached.result === 'valid' || cached.result === 'invalid') && Date.now() - cached.ts < REVIEW_TTL_MS) {
+            if (cached.result === 'valid') {
+              console.log('[AIGenerator] #898 采信其他Tab复核结果（会话有效），忽略本次跨Tab登出误报，零请求');
+              setIsLoggedIn(true);
+              setAuthChecked(true);
+              return;
+            }
+            console.log('[AIGenerator] #898 采信其他Tab复核结果（会话已失效），直接执行登出链，零请求');
+            setIsLoggedIn(false);
+            setAuthChecked(true);
+            setMessages([]);
+            setUserId(null);
+            setCredits(0);
+            clearSensitiveLocalStorage();
+            window.dispatchEvent(new CustomEvent('openLogin'));
+            return;
+          }
+        } catch { /* 缓存读取失败 → 走正常复核 */ }
+
         setTimeout(async () => {
           try {
             const res = await fetch('/api/user/info', { credentials: 'include' });
@@ -827,6 +853,7 @@ export function AIGeneratorProvider({ children }: { children: React.ReactNode })
               // 复核通过：会话仍然有效 → 判定为误报，恢复登录态并刷新用户信息
               if (data?.success && data?.user?.id) {
                 console.log('[AIGenerator] #896 复核通过（会话仍有效），忽略本次跨Tab登出误报');
+                try { localStorage.setItem(REVIEW_KEY, JSON.stringify({ result: 'valid', ts: Date.now() })); } catch { /* 存储不可用忽略 */ }
                 setIsLoggedIn(true);
                 setAuthChecked(true);
                 setUserId(data.user.id);
@@ -834,12 +861,13 @@ export function AIGeneratorProvider({ children }: { children: React.ReactNode })
               }
             }
           } catch {
-            // 网络异常时不武断登出，保守跳过本次信号
+            // 网络异常时不武断登出，保守跳过本次信号（不写结果缓存，让其他 Tab 自行复核）
             console.warn('[AIGenerator] #896 复核网络异常，保守跳过本次跨Tab登出信号');
             return;
           }
-          // 复核确认会话失效 → 执行真实登出链
+          // 复核确认会话失效 → 广播结果供其他 Tab 采信，然后执行真实登出链
           console.log('[AIGenerator] #896 复核确认会话已失效，执行跨Tab同步登出');
+          try { localStorage.setItem(REVIEW_KEY, JSON.stringify({ result: 'invalid', ts: Date.now() })); } catch { /* 存储不可用忽略 */ }
           setIsLoggedIn(false);
           setAuthChecked(true);
           setMessages([]);

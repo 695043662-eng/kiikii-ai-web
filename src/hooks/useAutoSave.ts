@@ -9,7 +9,7 @@
  * 5. 初始化加载：从后端拉取 workspace 还原状态
  */
 
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useCallback, useState } from 'react';
 import LZString from 'lz-string';
 
 const { compressToBase64, decompressFromBase64 } = LZString;
@@ -60,6 +60,9 @@ interface UseAutoSaveOptions {
   onSaveStatusChange?: (status: 'idle' | 'saving' | 'saved' | 'error') => void;
   /** #887 弊端1终极加固：CAS 冲突回调（收到 409 时由上层弹窗让用户决定是否覆盖） */
   onCasConflict?: (conflictData: CasConflictData) => void;
+  /** #898 主动清空标识（Ref 对象）：用户主动删除全部元素时由 CanvasContext 置 true，
+   *  doSave 看到该标志后放行空保存并在 payload 携带 is_intentional_clear（服务端据此放行覆盖云端），用后即焚 */
+  intentionalClearRef?: { current: boolean };
 }
 
 interface UseAutoSaveReturn {
@@ -128,6 +131,7 @@ export function useAutoSave(options: UseAutoSaveOptions): UseAutoSaveReturn {
     debounceMs = 3000,
     onSaveStatusChange,
     onCasConflict,
+    intentionalClearRef,
   } = options;
 
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -149,12 +153,13 @@ export function useAutoSave(options: UseAutoSaveOptions): UseAutoSaveReturn {
   const cloudUpdatedAtRef = useRef<string | null>(null); // #887 弊端3：CAS 乐观锁，记录云端 updated_at
   const casDialogLastFiredRef = useRef<number>(0); // #896：CAS 弹窗去重（弹窗未决期间不重复弹）
 
-  // #896 关键修复：渲染期【同步】赋值 Refs（原 useEffect 异步同步存在时序间隙）
-  // 事故链：onOtherTabLogout 将 userId/isLoggedIn 置 null → React 渲染前 maxWait 计时器抢先触发
-  // 强制保存 → Ref 仍持旧值 → 空画布被推上云端 → 409 CAS 冲突弹窗循环
-  // 渲染期同步赋值（幂等操作）确保 doSave 在任何计时器回调中都能立即看到最新身份状态
-  userIdRef.current = userId;
-  isLoggedInRef.current = isLoggedIn;
+  // #898 军师建议修正：渲染期直接赋值属于 React 官方警告的反模式（Concurrent Mode 下可能撕裂）。
+  // 改用 useLayoutEffect：commit 阶段、浏览器绘制前同步执行——语义等价（同样消除一帧时序缝隙，
+  // 任何事件/计时器触发的 doSave 必然发生在绘制之后，ref 已就绪）且符合 React 规范。
+  useLayoutEffect(() => {
+    userIdRef.current = userId;
+    isLoggedInRef.current = isLoggedIn;
+  }, [userId, isLoggedIn]);
 
   useEffect(() => {
     saveStatusRef.current = saveStatus;
@@ -185,15 +190,23 @@ export function useAutoSave(options: UseAutoSaveOptions): UseAutoSaveReturn {
       return false;
     }
 
-    // 🛡️ #896 救命数据保护：检测异常清空（账号切换原子性重置/状态机 Bug 导致的瞬间清空）
-    // 上一次成功保存的快照非空，而本次快照突然为空 → 极大概率是 #890 账号切换清空链路
-    // 此时绝不能把空画布写上云端（唯一云端备份会被清空！），直接拒绝落库
+    // 🛡️ #896 救命数据保护 + #898 主动清空放行：区分「异常清空」与「用户主动清空」
+    // 上一次成功保存的快照非空，而本次快照突然为空：
+    //  - 若 CanvasContext 打了主动清空标志（Ctrl+A 删除全部 / 删除最后一个元素）→ 合法业务操作，放行一次
+    //  - 否则极大概率是 #890 账号切换清空链路 → 绝不能把空画布写上云端（唯一云端备份会被清空！），拒绝落库
     const snapshot = getCanvasSnapshot();
     const snapshotJson = JSON.stringify(snapshot);
     const snapshotElementCount = Array.isArray(snapshot?.elements) ? snapshot.elements.length : 0;
+    let isIntentionalClearSave = false;
     if (snapshotElementCount === 0 && lastSnapshotRef.current && lastSnapshotRef.current !== '[]' && lastSnapshotRef.current !== '') {
-      console.warn('[AutoSave] #896 检测到画布被异常清空（上一快照非空 → 本次为空），拒绝保存以保护云端数据');
-      return false;
+      if (intentionalClearRef?.current === true) {
+        intentionalClearRef.current = false; // 一次性消费，用后即焚
+        isIntentionalClearSave = true;
+        console.log('[AutoSave] #898 用户主动清空画布（intentional clear），放行本次空保存并携带服务端放行标志');
+      } else {
+        console.warn('[AutoSave] #896 检测到画布被异常清空（上一快照非空 → 本次为空），拒绝保存以保护云端数据');
+        return false;
+      }
     }
     void snapshotJson;
 
@@ -217,6 +230,10 @@ export function useAutoSave(options: UseAutoSaveOptions): UseAutoSaveReturn {
       const casPayload: Record<string, unknown> = { canvas_data_compressed: compressed };
       if (cloudUpdatedAtRef.current) {
         casPayload.cloud_updated_at = cloudUpdatedAtRef.current;
+      }
+      // #898 主动清空放行：仅本次为「用户主动清空」的空保存时携带，服务端据此跳过空覆盖拦截（仍需通过 CAS 校验）
+      if (isIntentionalClearSave) {
+        casPayload.is_intentional_clear = true;
       }
       const payload = JSON.stringify(casPayload);
 

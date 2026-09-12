@@ -143,6 +143,24 @@ function replaceTempKeys(
   return walk(data) as CanvasData;
 }
 
+// 🛡️ #898 兼容解压：前端写入用 lz-string compressToBase64，历史遗留数据可能为 UTF16 压缩格式。
+// 解压顺序：Base64 优先（当前格式）→ UTF16 兜底（历史格式）→ null（三层全败，交由调用方保守处理）
+async function decompressCanvasData(data: unknown): Promise<CanvasData | null> {
+  try {
+    const record = data as Record<string, unknown> | null;
+    if (!record || !(record as Record<string, unknown>)._compressed) {
+      return data as CanvasData;
+    }
+    const compressed = record.data as string;
+    if (!compressed || typeof compressed !== 'string') return null;
+    const lz = await import('lz-string');
+    const raw = lz.decompressFromBase64(compressed) || lz.decompressFromUTF16(compressed);
+    return JSON.parse(raw || '{}') as CanvasData;
+  } catch {
+    return null;
+  }
+}
+
 // ============== 主路由 ==============
 
 export async function POST(request: NextRequest) {
@@ -158,7 +176,7 @@ export async function POST(request: NextRequest) {
     const supabase = getSupabaseClient(undefined, true);
 
     // 2. 解析请求体（支持压缩和未压缩两种格式）
-    const body = await request.json() as { canvas_data?: CanvasData; canvas_data_compressed?: string; cloud_updated_at?: string };
+    const body = await request.json() as { canvas_data?: CanvasData; canvas_data_compressed?: string; cloud_updated_at?: string; is_intentional_clear?: boolean };
 
     let canvas_data: CanvasData;
     if (body.canvas_data_compressed) {
@@ -222,13 +240,14 @@ export async function POST(request: NextRequest) {
           .single();
 
         let conflictCanvasData = conflictRow?.canvas_data as CanvasData | null;
-        // 解压缩
+        // 🛡️ #898 解压修复：原 decompressFromUTF16 与前端 compressToBase64 写入格式不匹配 → 必返 null →
+        // 冲突弹窗返回空数据，用户点「使用云端」即丢画布。改用兼容解压（Base64 优先 / UTF16 兜底）
         if (conflictCanvasData && (conflictCanvasData as Record<string, unknown>)._compressed) {
-          try {
-            const lz = await import('lz-string');
-            const compressed = (conflictCanvasData as Record<string, unknown>).data as string;
-            conflictCanvasData = JSON.parse(lz.decompressFromUTF16(compressed) || '{}') as CanvasData;
-          } catch { /* 降级返回原始数据 */ }
+          const decompressed = await decompressCanvasData(conflictCanvasData);
+          if (decompressed) {
+            conflictCanvasData = decompressed;
+          }
+          // 解压失败 → 降级返回原始压缩数据（前端 loadWorkspace 同款三层防爆解压兜底）
         }
 
         return NextResponse.json({
@@ -237,6 +256,42 @@ export async function POST(request: NextRequest) {
           server_updated_at: currentRow.updated_at,
           canvas_data: conflictCanvasData,
         }, { status: 409 });
+      }
+    }
+
+    // 5b. 🛡️ #898 服务端空画布保护（#897 手册虚报，本轮真实落地）+ 主动清空放行
+    // 拦截：入参元素为空 且 未携带主动清空标志 → 若云端存在非空数据，409 拒绝（防御 #890 异常清空链污染云端唯一备份）
+    // 放行：is_intentional_clear === true（用户 Ctrl+A 删除/删最后一个元素的合法清空，前端一次性打标），
+    //       但仍需通过上方 CAS 校验，防止多 Tab 竞态下绕过乐观锁清空他人更新
+    {
+      const incomingData = body.canvas_data_compressed
+        ? await decompressCanvasData({ _compressed: true, data: body.canvas_data_compressed })
+        : (body.canvas_data ?? null);
+      const incomingCount = Array.isArray(incomingData?.elements) ? incomingData.elements.length : 0;
+      if (incomingCount === 0 && body.is_intentional_clear !== true) {
+        const { data: cloudRow } = await supabase
+          .from('user_workspaces')
+          .select('canvas_data')
+          .eq('user_id', userId)
+          .single();
+        let cloudCount = 0;
+        if (cloudRow?.canvas_data) {
+          const cloudData = await decompressCanvasData(cloudRow.canvas_data);
+          if (cloudData) {
+            cloudCount = Array.isArray(cloudData.elements) ? cloudData.elements.length : 0;
+          } else {
+            // 解压失败 → 保守视为非空（宁可误拦不可漏放，保护云端唯一备份）
+            cloudCount = 1;
+          }
+        }
+        if (cloudCount > 0) {
+          console.warn(`[autosave] #898 空画布覆盖拦截: 用户 ${userId.slice(0, 8)}, 云端 ${cloudCount} 元素, 入参 0 元素且无主动清空标志 → 拒绝落库`);
+          return NextResponse.json({
+            error: 'EMPTY_CANVAS_OVERWRITE_BLOCKED',
+            message: '空画布保存被拒绝（疑似异常清空）。若为用户主动清空，请携带 is_intentional_clear 标志。',
+          }, { status: 409 });
+        }
+        // 云端也为空 → 空覆盖空，无数据丢失风险，放行（保持 updated_at 推进，避免客户端反复重试）
       }
     }
 

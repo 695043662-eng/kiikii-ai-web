@@ -193,6 +193,7 @@
 
 | 编号 | 问题类型 | 关键词 | 位置 |
 |------|----------|--------|------|
+| #898 | 主动清空画布死锁释放+服务端空覆盖防线真实落地+CAS冲突解压格式Bug | **intentionalClearRef主动清空打标(deleteSelected/deleteElement)+useAutoSave一次性消费放行+payload is_intentional_clear透传+服务端EMPTY_CANVAS_OVERWRITE_BLOCKED 409(解压统计元素数,无标志空覆盖非空云端拒绝)+decompressCanvasData兼容解压(修#897虚报+CAS冲突返回decompressFromUTF16→Base64优先防丢画布)+kiikii_session_review跨Tab复核3秒TTL防风暴+渲染期ref→useLayoutEffect** | ✅ 已修复 |
 | #890 | 终极全面清扫：全站鉴权/缓存隔离/UI弹窗/多标签页同步 | **clearSensitiveLocalStorage集中24个敏感Key+alert()全灭→toast+跨Tab auth_signal+storage事件监听+5个API路由加requireAuth+video/generate userId从JWT非body+账号切换原子性reset(prevUserIdRef)+CanvasContext SET_ELEMENTS清空+video清prompt** | ✅ 已修复 |
 | #887 | 画布云端存储升级：localStorage→云端账号绑定 | **autosave路由requireAuth替代Authorization header+useAutoSave添加credentials:include+CanvasContext传入真实userId/isLoggedIn+登录后自动云端加载+localStorage数据自动上传云端+sendBeacon→fetch keepalive+FK约束移除+dev-sandbox用户创建+lz-string压缩+防抖5s+最大等待10s强制保存+CAS乐观锁(updated_at校验+409冲突弹窗让用户决定绝不静默覆盖)+解压三层防爆(decompress→JSON.parse降级→localStorage回退)+云端加载全区域遮罩锁定交互防抢占** | ✅ 已修复 |
 | #886 | 视频面板双进度条+右键菜单不消失+浏览器右键范围过宽 | **删除SVG圆形进度环+CanvasRoseCurve传externalProgress显示真实进度+进度文本条件化+关闭监听增加mousedown/pointerdown/wheel/contextmenu+data-panel-context-menu属性排除+onContextMenu白名单收紧移除isEditing/getSelection** | ✅ 已修复 |

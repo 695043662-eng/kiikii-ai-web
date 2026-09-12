@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -62,6 +62,8 @@ export default function HistoryRecordsDialog({ open, onOpenChange, source }: His
   
   const [selectedIds, setSelectedIds] = useState<(string | number)[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
+  // 🛡️ #899 内存防泄漏：本会话内为历史记录创建的所有 blob URL 注册表（弹窗关闭/组件卸载时统一 revoke）
+  const blobUrlsRef = useRef<string[]>([]);
   const [previewImages, setPreviewImages] = useState<string[]>([]);
   const [previewIndex, setPreviewIndex] = useState(0);
   const [showPreview, setShowPreview] = useState(false);
@@ -92,6 +94,36 @@ export default function HistoryRecordsDialog({ open, onOpenChange, source }: His
       fetchRecords();
     }
   }, [open, fetchRecords]);
+
+  // 🛡️ #899 内存防泄漏：弹窗关闭时统一释放本会话创建的所有 blob URL
+  // 反复开关历史弹窗会为每条命中缓存的记录新建 Object URL，若不释放浏览器内存将持续攀升
+  useEffect(() => {
+    if (!open) {
+      const urls = blobUrlsRef.current;
+      blobUrlsRef.current = [];
+      urls.forEach((u) => {
+        try {
+          if (u.startsWith('blob:')) URL.revokeObjectURL(u);
+        } catch {
+          /* revoke 幂等无害 */
+        }
+      });
+    }
+  }, [open]);
+
+  // 🛡️ #899 组件卸载兜底释放（防止弹窗处于打开状态时组件被卸载导致 URL 泄漏）
+  useEffect(() => {
+    return () => {
+      blobUrlsRef.current.forEach((u) => {
+        try {
+          if (u.startsWith('blob:')) URL.revokeObjectURL(u);
+        } catch {
+          /* revoke 幂等无害 */
+        }
+      });
+      blobUrlsRef.current = [];
+    };
+  }, []);
 
   // #232 Sprint 4: 同步状态从 store 获取
   const isSyncing = isLoading;
@@ -136,6 +168,7 @@ export default function HistoryRecordsDialog({ open, onOpenChange, source }: His
         const cachedUrl = await loadImageFromCache(key);
         if (cachedUrl) {
           hitCount++;
+          blobUrlsRef.current.push(cachedUrl); // 🛡️ #899 注册到会话表，弹窗关闭时统一 revoke
           if (!updates.has(info.recordId)) {
             updates.set(info.recordId, []);
           }
@@ -180,10 +213,18 @@ export default function HistoryRecordsDialog({ open, onOpenChange, source }: His
             if (type === 'reference') {
               // 更新参考图
               while (newRefImages.length <= imageIndex) newRefImages.push('');
+              // 🛡️ #899 内存防泄漏：替换前释放被覆盖的旧 blob URL（缓存的内存副本仍可显示，不影响切换瞬间渲染）
+              if (newRefImages[imageIndex]?.startsWith('blob:')) {
+                try { URL.revokeObjectURL(newRefImages[imageIndex]); } catch { /* 忽略释放异常 */ }
+              }
               newRefImages[imageIndex] = cachedUrl;
             } else {
               // 更新生成的图片
               if (imageIndex < newImages.length) {
+                // 🛡️ #899 内存防泄漏：同上，释放被替换的旧 blob URL
+                if (newImages[imageIndex]?.startsWith('blob:')) {
+                  try { URL.revokeObjectURL(newImages[imageIndex]); } catch { /* 忽略释放异常 */ }
+                }
                 newImages[imageIndex] = cachedUrl;
               }
             }

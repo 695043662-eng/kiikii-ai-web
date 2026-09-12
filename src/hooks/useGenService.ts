@@ -329,6 +329,8 @@ export function useGenService() {
   const requestLock = getRequestLock();
   
   const abortControllerRef = useRef<AbortController | null>(null);
+  // 🛡️ #899 防连击提交窗口锁：从点击生成到请求建立期间，拦截连击狂点（请求建立后立即释放，不影响合法的并行任务）
+  const submitLockRef = useRef(false);
   const pollingTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
   const currentTaskIdRef = useRef<string | null>(null);
   const placeholdersRef = useRef<Map<number, PlaceholderInfo>>(new Map());
@@ -695,6 +697,30 @@ export function useGenService() {
       onBeforeGenerate,
     } = config;
 
+    // 🛡️ #899 防御0：防连击提交窗口锁（在获锁与状态变更之前，最先检查）
+    // 语义：用户狂点 5 次"生成" → 只有第 1 次穿过锁，其余 4 次被拦截（不扣积分、不发请求）
+    // 注意：不阻止"上一个任务生成中的新任务"——提交窗口在 fetch 建立后立即释放，合法并行任务不受影响
+    if (submitLockRef.current) {
+      console.warn('[GenService] #899 提交窗口锁生效：上次提交仍在建立连接，拦截本次连击');
+      config.onError?.({
+        type: 'global',
+        message: '任务正在提交中，请稍候再点击',
+      });
+      return { taskId: '', success: false, message: '任务正在提交中，请稍候' };
+    }
+    submitLockRef.current = true;
+
+    // 🛡️ #899 参数硬校验前移：在获取 requestLock 计数与提交窗口锁之前抛错，
+    // 避免获锁后 throw 导致计数永久泄漏（旧实现 L760/L801 校验在 acquire 之后且不在 try 内）
+    if (!resolution) {
+      submitLockRef.current = false;
+      throw new Error('[useGenService] resolution 参数缺失！禁止回退默认值！');
+    }
+    if (mode === 'video' && !config.duration) {
+      submitLockRef.current = false;
+      throw new Error('[useGenService] duration 参数缺失！视频模式必须传递 duration！');
+    }
+
     // ⚠️ 防御1：尝试获取锁（计数锁，支持 5 个并发）
     // 如果当前有 5 个任务在执行，会自动排队等待
     const acquired = await requestLock.acquire();
@@ -742,9 +768,7 @@ export function useGenService() {
     
     // 构建请求体（⚠️ 防御3：添加 client_request_id）
     // #681 修复：删除回退逻辑！参数缺失必须报错！
-    if (!resolution) {
-      throw new Error('[useGenService] resolution 参数缺失！禁止回退默认值！');
-    }
+    // 🛡️ #899 校验已前移至防御0 之前（原位置校验会导致获锁后 throw 泄漏计数锁）
     const requestBody: Record<string, any> = {
       taskId,
       prompt: prompt.trim(),
@@ -782,10 +806,7 @@ export function useGenService() {
     }
 
     // 视频参数
-    // #681 修复：duration 必须传递，禁止回退！
-    if (mode === 'video' && !config.duration) {
-      throw new Error('[useGenService] duration 参数缺失！视频模式必须传递 duration！');
-    }
+    // #681 修复：duration 必须传递，禁止回退！（校验已前移至防御0，此处仅做兜底提示）
     if (config.duration !== undefined) {
       requestBody.duration = config.duration;
     }
@@ -869,6 +890,9 @@ export function useGenService() {
         body: JSON.stringify(requestBody),
         signal: abortControllerRef.current.signal,
       });
+
+      // 🛡️ #899 fetch 已返回（无论 ok 与否），提交窗口结束，释放连击锁（后续点击=合法新任务）
+      submitLockRef.current = false;
 
       if (!response.ok) {
         // 🛡️ 维度一：认证失效自动处理
@@ -1300,6 +1324,9 @@ export function useGenService() {
         return { taskId, success: true };
       }
     } catch (error: any) {
+      // 🛡️ #899 catch 兜底释放连击锁（网络异常/中止路径），防止窗口锁永久卡死
+      submitLockRef.current = false;
+
       if (error.name === 'AbortError') {
         console.log('[GenService] 请求已中止');
         // 清理占位符

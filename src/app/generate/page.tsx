@@ -962,6 +962,11 @@ export default function SingleGeneratePage() {
                 if (t.id !== item.taskId) return t;
                 const newImages = [...t.images];
                 if (item.imageIndex < newImages.length) {
+                  // 🛡️ #899 替换前释放被覆盖的旧 blob URL（防反复刷新累积泄漏；proxyUrl/perm URL 不受影响；revoke 幂等无害）
+                  const oldUrl = newImages[item.imageIndex];
+                  if (oldUrl && oldUrl.startsWith('blob:')) {
+                    try { URL.revokeObjectURL(oldUrl); } catch { /* ignore */ }
+                  }
                   newImages[item.imageIndex] = cachedUrl;
                 }
                 return { ...t, images: newImages };
@@ -983,6 +988,11 @@ export default function SingleGeneratePage() {
                 if (t.id !== item.taskId) return t;
                 const newImages = [...t.images];
                 if (item.imageIndex < newImages.length) {
+                  // 🛡️ #899 替换前释放被覆盖的旧 blob URL
+                  const oldUrl = newImages[item.imageIndex];
+                  if (oldUrl && oldUrl.startsWith('blob:')) {
+                    try { URL.revokeObjectURL(oldUrl); } catch { /* ignore */ }
+                  }
                   newImages[item.imageIndex] = proxyUrl;
                 }
                 return { ...t, images: newImages };

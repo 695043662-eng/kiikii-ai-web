@@ -75,6 +75,10 @@ export default function AddCarouselModal({ isOpen, onClose, onSuccess, editItem 
     setMediaType(isVideo ? 'video' : 'image');
     // 上传后 objectKey 暂空，提交时再上传
     setObjectKey('');
+    // 🛡️ #899 重复选择文件时先释放旧预览 blob URL，防覆盖泄漏
+    if (mediaPreview && mediaPreview.startsWith('blob:')) {
+      try { URL.revokeObjectURL(mediaPreview); } catch { /* ignore */ }
+    }
     const objUrl = URL.createObjectURL(file);
     setMediaPreview(objUrl);
     
@@ -193,11 +197,17 @@ export default function AddCarouselModal({ isOpen, onClose, onSuccess, editItem 
     setTag('');
     setSubmitting(false);
   };
-  
+
+  // 🛡️ #899 中途关闭弹窗（X/遮罩/取消）时清理预览 blob，防反复开关累积泄漏
+  const handleDismiss = () => {
+    resetForm();
+    onClose();
+  };
+
   if (!isOpen) return null;
   
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={handleDismiss}>
       <div
         className="bg-white rounded-2xl shadow-2xl w-[480px] max-h-[80vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
@@ -208,7 +218,7 @@ export default function AddCarouselModal({ isOpen, onClose, onSuccess, editItem 
             <Sparkles className="w-5 h-5 text-orange-500" />
             {isEditMode ? '编辑轮播媒体' : '添加轮播媒体'}
           </h2>
-          <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center transition-colors">
+          <button onClick={handleDismiss} className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center transition-colors">
             <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>
@@ -309,7 +319,7 @@ export default function AddCarouselModal({ isOpen, onClose, onSuccess, editItem 
         {/* 底部按钮 */}
         <div className="px-6 py-4 border-t border-gray-100 flex gap-3">
           <button
-            onClick={onClose}
+            onClick={handleDismiss}
             className="flex-1 px-4 py-2 border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
             disabled={submitting}
           >

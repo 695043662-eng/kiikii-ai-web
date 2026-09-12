@@ -6,6 +6,60 @@
 
 ---
 
+## #899 深水区体检：Object URL 泄漏 + 生成按钮连击死锁 + 僵尸文件/尺寸风控 + 超时截断（4 项全站排查）
+
+**状态**: ✅ 已修复 | **日期**: 2026-09-12
+
+### 排查 1：Object URL 内存泄漏（26 处创建点全量审计）
+
+**结论**: 23 处闭环良好，3 处泄漏已修复
+
+| 泄漏点 | 场景 | 修复 |
+|--------|------|------|
+| HistoryRecordsDialog.tsx | IndexedDB 缓存命中的 blob URL 挂到记录 state，反复开关弹窗/翻页累积泄漏 | ① 组件级 `blobUrlsRef` 注册表；② 替换旧值前 revoke（`blob:` 前缀判断）；③ 弹窗关闭 + 组件卸载双兜底统一释放 |
+| generate/page.tsx | 任务列表缓存替换（命中/代理兜底）时旧 blob URL 被覆盖丢失引用 | updater 内替换前 revoke 旧值（幂等，StrictMode 双调用无害） |
+| AddCarouselModal.tsx | 管理后台弹窗：关闭不清理 + 重复选文件覆盖不 revoke | select 前 revoke 旧值 + resetForm 释放 + 三处关闭按钮统一走 `handleDismiss` |
+
+**闭环良好的关键路径**（无需改动）: CanvasContext deleteElement/deleteSelected（`blob:` 前缀判断 + revoke，#438）、上传成功替换+revoke、temp_RightPanel 视频/参考图上传（成功/删除/卸载三重释放）、canvas/page.tsx 视频上传+下载 zip+批量清理（L3211）、model-utils 时长探测、image-compression 压缩完成、AddCardModal、download/history/预览弹窗。
+
+**教训**: `createObjectURL` 的正确姿势 = "谁消费谁释放"——替换前 revoke 旧值、卸载时兜底注册表。
+
+### 排查 2：生成按钮连击死锁（防并发击穿）
+
+**结论**: 既有 RequestLock（5 并发计数锁）只防 OOM，**不防连击**——狂点 5 次 = 5 个任务 = 5 倍积分扣费！
+
+**修复（useGenService.ts 四处）**:
+1. `submitLockRef` 提交窗口锁：handleGenerate 入口拦截连击（从点击到 SSE 建立期间重复点击直接返回"任务提交中"）
+2. fetch 完成后立即释放（无论 ok 与否——此后新点击属合法并行任务，不破坏多任务产品形态）
+3. catch 兜底释放
+4. **附带修复 requestLock 计数泄漏**: resolution/duration 参数缺失 throw 发生在 acquire 之后且不在 try 内 → 锁永久占用。校验前移到获锁前（一石二鸟：同时避免 submitLock 卡死）
+
+**防线矩阵**: 提交窗口锁（防连击）→ RequestLock 计数锁（防并发轰炸）→ client_request_id 幂等 → 积分预校验 → 后端 CAS 乐观锁扣费。
+
+### 排查 3：COS 僵尸文件与尺寸勒索
+
+**结论**: 尺寸双防线 ✅；僵尸文件由云侧生命周期兜底 ✅（无需应用层 Cron，避免 2C2G 重复建设）
+
+- **尺寸校验（前端+服务端双防线）**: 视频 30-50MB / 音频 15MB / 图片压缩前 50MB；服务端 upload-reference 50MB、canvas/upload 图 50/视频 500/音频 50MB
+- **僵尸文件风控现状**: 上传走 `temp` 桶，cos.ts L20 注释载明 **temp 桶已配置 5 天生命周期（云侧自动过期）**；perm 转正走跨桶 Copy，temp 原件到期自动清。画布历史图片引用 perm（`assetType=perm` 实证），不受影响。**运维验证项**: 登录腾讯云控制台确认 temp 桶生命周期规则真实存在（代码侧无法查证云配置）；若未配置需补建（规则: temp/ 前缀 5 天过期删除）
+- **残余风险**: 参考图上传后 5 天内不点生成 → temp 过期 → 生成失败（已有完整错误提示+退费兜底，可接受）
+
+### 排查 4：长耗时请求超时截断
+
+**结论**: 全链路覆盖无缺口 ✅
+
+| 层级 | 配置 | 状态 |
+|------|------|------|
+| Next.js maxDuration | split/video/llm/image-to-image/upload-ref 全部 1900s | ✅ |
+| image-to-image 上游 | 原生 https.request + 1800s req timeout + 事件驱动 | ✅ |
+| video/generate 提交 | 15s 超时（快速失败） | ✅ |
+| video 轮询窗口 | 36×5s=3min，超时返回 still_processing，离线巡检接管（#852 状态机） | ✅ |
+| 前端绝对超时 | 1800s + AbortController signal（用户可主动取消） | ✅ |
+
+**关键设计**: 自托管（非 Vercel）下 maxDuration 仅是元数据，真正的斩断靠路由内部自身 timeout——已确认 image-to-image 的 1800s req timeout 是独立于 maxDuration 的真实保险。
+
+---
+
 ## #898 Intentional Clear Flag（释放"用户主动清空画布"合法场景 + 落地虚报的服务端防线）
 
 **状态**: ✅ 已修复 | **日期**: 2026-09-12

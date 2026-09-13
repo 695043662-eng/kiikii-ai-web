@@ -1,6 +1,6 @@
 // 全局状态存储 - 使用闭包保存状态，避免组件重新挂载时丢失
 
-import { safeSetItem } from '@/lib/safe-storage';
+import { safeSetItem, safeSessionSetItem } from '@/lib/safe-storage';
 
 interface GenerationTask {
   id: string;
@@ -286,8 +286,8 @@ const createStore = () => {
   const saveReferenceImages = () => {
     if (typeof window === 'undefined') return;
     try {
-      sessionStorage.setItem('referenceImages', JSON.stringify(referenceImages));
-      sessionStorage.setItem('referenceImageUrls', JSON.stringify(referenceImageUrls));
+      safeSessionSetItem('referenceImages', JSON.stringify(referenceImages));
+      safeSessionSetItem('referenceImageUrls', JSON.stringify(referenceImageUrls));
     } catch (e) {
       console.error('保存参考图失败:', e);
     }
@@ -296,7 +296,7 @@ const createStore = () => {
   const saveVideoReferenceImages = () => {
     if (typeof window === 'undefined') return;
     try {
-      sessionStorage.setItem('videoReferenceImages', JSON.stringify(videoReferenceImages));
+      safeSessionSetItem('videoReferenceImages', JSON.stringify(videoReferenceImages));
     } catch (e) {
       console.error('保存视频参考图失败:', e);
     }

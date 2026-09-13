@@ -12,6 +12,7 @@
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
+import { safeSessionSetItem } from '@/lib/safe-storage';
 import LeftNav from '@/components/LeftNav';
 import AuthModal from '@/components/AuthModal';
 import { useAIGenerator } from '@/contexts/AIGeneratorContext';
@@ -190,7 +191,11 @@ export default function LibraryPage() {
         imageKey: asset.imageKey,
         prompt: asset.prompt,
       });
-      sessionStorage.setItem('canvas_pending_images', JSON.stringify(pendingImages));
+      // 🛡️ #901 safeSessionSetItem 防配额溢出（url/短文本，但仍防高水位抛错中断流程）
+      if (!safeSessionSetItem('canvas_pending_images', JSON.stringify(pendingImages))) {
+        toast.error('浏览器缓存空间不足，无法加入画布队列，请清理后重试');
+        return;
+      }
       toast.success('已加入画布队列，前往画布查看');
       // 跳转画布
       window.location.href = '/canvas';

@@ -626,7 +626,7 @@ export default function VideoGeneratePage() {
       // #680 修复：强制小写，兼容旧缓存中的大写值（如 480P → 480p）
       const normalized = stored ? stored.toLowerCase() : '720p';
       if (stored && stored !== normalized) {
-        localStorage.setItem('video-page-resolution', normalized);
+        safeSetItem('video-page-resolution', normalized);
       }
       return normalized;
     }

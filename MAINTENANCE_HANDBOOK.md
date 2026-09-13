@@ -6,6 +6,27 @@
 
 ---
 
+## #901 终极体检：LocalStorage 配额炸弹 + 413 Payload + 闭包陷阱 + 全局监听器泄漏（4 项排查）
+
+**状态**: ✅ 已修复 | **日期**: 2026-09-12
+
+### 排查结论与修复
+
+| 项 | 结论 | 处理 |
+|------|------|------|
+| 1. LocalStorage QuotaExceededError | ❌ **实锤缺口**：20+ 处裸写 setItem，高水位时连小字符串写入都会抛错；巨型 payload 点位（canvasToSend ×4、canvas_pending_images、generateStore 参考图 ×3）无任何防护 | ✅ safe-storage.ts 新增 safeSessionSetItem；canvasToSend ×4 改造（失败 toast + 阻断跳转）；library canvas_pending_images（失败 toast + return）；generateStore ×3 / AIGeneratorContext 偏好 ~10 处 / video resolution / canvas rightPanelWidth 机械替换 safeSetItem/safeSessionSetItem |
+| 2. 413 Entity Too Large | ✅ 无代码层缺口：App Router route handler 无内置 body 限制（pages bodyParser 语法不适用）；serverActions bodySizeLimit 100mb；autosave 走 lz-string 压缩 | 📋 部署注意：反向代理需确认 client_max_body_size ≥ 10m（代码仓不可见） |
+| 3. 闭包陷阱/幽灵回档 | ✅ 架构性安全：CanvasContext 为 useReducer（reducer 天然接收 prev state），无 setElements 直接 setter；ADD_ELEMENTS 在 reducer 内函数式合并；SET_ELEMENTS 仅云端加载/清空（全新数据语义） | 无需补丁 |
+| 4. 全局监听器泄漏 | ✅ 全部配对：canvas 28:28、GeneratePanelNode 11:13、useCanvasCore 3:6、PenToolbar/generate/video/HeroCarousel/CanvasVideo/models/AIGeneratorContext 全部 add=remove（Galaxy 人工核查 cleanup 完整，3:3） | 无需补丁 |
+
+### 关键改造模式
+
+- **大 payload 点位**：`if (!safeSessionSetItem(key, val)) { toast.error('本地缓存空间不足...'); return; }` —— 写入失败阻断流程 + 明确提示，绝不静默或抛错
+- **小偏好点位**：机械替换 `safeSetItem/safeSessionSetItem`（内部 try-catch + 配额满静默容灾）
+- **语法红线**：`if (!fn(...))` 包裹多行参数时，闭括号必须完整（`)));` → `))) {` + `}`），本轮曾因 edit 截断产生语法损坏，已即时修复
+
+---
+
 ## #900 极限抗压防雪崩二期：发码竞态锁 + 轮询幽灵审计 + 节点 memo 确认 + 全站 ErrorBoundary（4 项排查）
 
 **状态**: ✅ 已修复 | **日期**: 2026-09-12

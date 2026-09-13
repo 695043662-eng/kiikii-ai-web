@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useCallback, useEffect, useMemo, startTransition, Suspense } from 'react';
+import { toast } from 'sonner';
 import { createPortal, flushSync } from 'react-dom';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -26,7 +27,6 @@ import PenToolbar, { hexToHSB, hsbToHex } from '@/components/canvas/toolbars/Pen
 import { InfoDialog } from '@/components/ui/info-dialog';
 import AuthModal from '@/components/AuthModal';
 import { useSharedData } from '@/hooks/useSharedData';
-import { toast } from 'sonner';
 import CanvasRoseCurve from '@/components/canvas/CanvasRoseCurve';
 import { translateErrorMessage } from '@/lib/error-handler';
 import TopBar from '@/components/temp_TopBar';
@@ -39,7 +39,7 @@ import ConnectionPulseCanvas, { type ConnectionPath } from '@/components/Connect
 import { useCanvasCore, CANVAS_HEIGHT, IMAGE_OVERLAP_OFFSETS } from '@/hooks/useCanvasCore';
 import { usePresignedUrl } from '@/hooks/usePresignedUrl';
 import { getPresignedUrls } from '@/lib/presigned-url-cache';
-import { safeSetItem } from '@/lib/safe-storage';
+import { safeSetItem, safeSessionSetItem } from '@/lib/safe-storage';
 import { safeJsonResponse } from '@/lib/safe-json';
 import { uploadFile } from '@/lib/upload';
 import { globalPendingUploads } from '@/hooks/useOptimisticUpload';
@@ -1557,7 +1557,8 @@ function CanvasApp({ canvas, router }: { canvas: CanvasContextType; router: Retu
   
   // 持久化右侧面板宽度
   useEffect(() => {
-    localStorage.setItem('rightPanelWidth', String(rightPanelWidth));
+    // 🛡️ #901 走 safeSetItem：配额满时不抛错（小字符串在高水位下同样会被 QuotaExceededError 击穿）
+    safeSetItem('rightPanelWidth', String(rightPanelWidth));
   }, [rightPanelWidth]);
   
   const [isResizingPanel, setIsResizingPanel] = useState(false);
@@ -12515,11 +12516,14 @@ function CanvasContent({
                       prompt: img.sourcePrompt || '',
                     }));
                     if(imageData.length > 0) {
-                      sessionStorage.setItem('canvasToSend', JSON.stringify({
+                      if (!safeSessionSetItem('canvasToSend', JSON.stringify({
                         images: imageData,
                         imageUrl: imageData[0].imageUrl,
                         prompt: imageData[0].prompt,
-                      }));
+                      }))) {
+                        toast.error('本地缓存空间不足，发送失败，请清理浏览器存储后重试');
+                        return;
+                      }
                       router.push('/generate');
                     }
                   }}
@@ -12542,10 +12546,14 @@ function CanvasContent({
                       imageUrl: getCOSUrlForElement(img),
                     }));
                     if(imageUrls.length > 0) {
-                      sessionStorage.setItem('canvasToSendVideo', JSON.stringify({
+                      // 🛡️ #901 写入失败阻断跳转（QuotaExceededError 防护）
+                      if (!safeSessionSetItem('canvasToSendVideo', JSON.stringify({
                         images: imageUrls,
                         imageUrl: imageUrls[0].imageUrl,
-                      }));
+                      }))) {
+                        toast.error('本地缓存空间不足，发送失败，请清理浏览器存储后重试');
+                        return;
+                      }
                       router.push('/video');
                     }
                   }}
@@ -13408,11 +13416,15 @@ function CanvasContent({
                   const sendUrl = selectedImageEl.imageUrl || ((selectedImageEl as any).imageUrls as string[])?.[0];
                   const sendKey = selectedImageEl.imageKey || '';
                   if(sendUrl || sendKey) {
-                    sessionStorage.setItem('canvasToSend', JSON.stringify({
+                    // 🛡️ #901 写入失败阻断跳转（QuotaExceededError 防护）
+                    if (!safeSessionSetItem('canvasToSend', JSON.stringify({
                       imageUrl: sendUrl || '',
                       imageKey: sendKey,
                       prompt: selectedImageEl.sourcePrompt || '',
-                    }));
+                    }))) {
+                      toast.error('本地缓存空间不足，发送失败，请清理浏览器存储后重试');
+                      return;
+                    }
                     router.push('/generate');
                   }
                 }}
@@ -13433,9 +13445,13 @@ function CanvasContent({
                   // #417 支持面板类型
                   const sendUrl = selectedImageEl.imageUrl || ((selectedImageEl as any).imageUrls as string[])?.[0];
                   if(sendUrl) {
-                    sessionStorage.setItem('canvasToSendVideo', JSON.stringify({
+                    // 🛡️ #901 写入失败阻断跳转（QuotaExceededError 防护）
+                    if (!safeSessionSetItem('canvasToSendVideo', JSON.stringify({
                       imageUrl: sendUrl,
-                    }));
+                    }))) {
+                      toast.error('本地缓存空间不足，发送失败，请清理浏览器存储后重试');
+                      return;
+                    }
                     router.push('/video');
                   }
                 }}

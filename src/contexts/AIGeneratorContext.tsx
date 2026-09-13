@@ -9,6 +9,7 @@ import { clearAllReferenceImages, deleteReferenceImage } from '@/lib/dialog-data
 import { getModelSupportedTypes } from '@/lib/effective-sources';
 import { ModelDetector, MODEL_MODE_CONSTRAINTS } from '@/lib/model-utils';
 import { toast } from 'sonner';
+import { safeSetItem } from '@/lib/safe-storage';
 import { clearSensitiveLocalStorage, setAuthSignal, removeAuthSignal, registerCrossTabAuthSync, getAuthSignalUserId } from '@/lib/local-storage-cleanup';
 import { useHistoryStore, type HistoryRecord } from '@/store/historyStore';
 import type { VideoModelMode } from '@/components/ModelModeSwitcher';
@@ -582,14 +583,14 @@ export function AIGeneratorProvider({ children }: { children: React.ReactNode })
   // 系统自动推断变成 i2v → 用户的选择被覆盖
 
   // ========== 记忆功能：参数变化时自动保存到localStorage ==========
-  useEffect(() => { localStorage.setItem('dialog-selectedModel', selectedModel); }, [selectedModel]);
-  useEffect(() => { localStorage.setItem('dialog-modelTab', modelTab); }, [modelTab]);
-  useEffect(() => { localStorage.setItem('dialog-selectedRatio', selectedRatio); }, [selectedRatio]);
-  useEffect(() => { localStorage.setItem('dialog-selectedResolution', selectedResolution); }, [selectedResolution]);
-  useEffect(() => { localStorage.setItem('dialog-selectedAspectRatio', selectedAspectRatio); }, [selectedAspectRatio]);
-  useEffect(() => { localStorage.setItem('dialog-selectedCount', selectedCount.toString()); }, [selectedCount]);
-  useEffect(() => { localStorage.setItem('dialog-selectedDuration', selectedDuration.toString()); }, [selectedDuration]);
-  useEffect(() => { if (hhOverrideMode) localStorage.setItem('dialog-hhOverrideMode', hhOverrideMode); }, [hhOverrideMode]);
+  useEffect(() => { safeSetItem('dialog-selectedModel', selectedModel); }, [selectedModel]);
+  useEffect(() => { safeSetItem('dialog-modelTab', modelTab); }, [modelTab]);
+  useEffect(() => { safeSetItem('dialog-selectedRatio', selectedRatio); }, [selectedRatio]);
+  useEffect(() => { safeSetItem('dialog-selectedResolution', selectedResolution); }, [selectedResolution]);
+  useEffect(() => { safeSetItem('dialog-selectedAspectRatio', selectedAspectRatio); }, [selectedAspectRatio]);
+  useEffect(() => { safeSetItem('dialog-selectedCount', selectedCount.toString()); }, [selectedCount]);
+  useEffect(() => { safeSetItem('dialog-selectedDuration', selectedDuration.toString()); }, [selectedDuration]);
+  useEffect(() => { if (hhOverrideMode) safeSetItem('dialog-hhOverrideMode', hhOverrideMode); }, [hhOverrideMode]);
 
   // ========== #860 修复 React #418：挂载后从 localStorage 恢复用户偏好 ==========
   // 初始渲染使用默认值（SSR 与 Client 一致），挂载后再恢复 localStorage 中的记忆值

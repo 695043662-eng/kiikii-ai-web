@@ -32,6 +32,29 @@ export function safeSetItem(key: string, value: string): boolean {
 }
 
 /**
+ * 安全写入 sessionStorage（#901 终极体检：同防护覆盖会话级存储）
+ * @param key 存储键名
+ * @param value 存储值（字符串）
+ * @returns 是否写入成功
+ */
+export function safeSessionSetItem(key: string, value: string): boolean {
+  try {
+    sessionStorage.setItem(key, value);
+    return true;
+  } catch (error) {
+    if (error instanceof DOMException) {
+      // QuotaExceededError - 会话存储空间已满
+      if (error.name === 'QuotaExceededError' || error.code === 22) {
+        console.warn(`[SafeStorage] sessionStorage 已满，跳过缓存: ${key}`);
+        return false;
+      }
+    }
+    console.warn(`[SafeStorage] sessionStorage 写入失败: ${key}`, error);
+    return false;
+  }
+}
+
+/**
  * 安全读取 localStorage
  * @param key 存储键名
  * @param defaultValue 默认值（读取失败时返回）

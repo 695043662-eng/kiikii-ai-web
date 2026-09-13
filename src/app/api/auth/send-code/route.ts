@@ -6,6 +6,10 @@ import { checkIpRateLimit, recordIpAccess, extractClientIp } from '@/lib/ip-rate
 // 验证码有效期（分钟）
 const VERIFICATION_CODE_EXPIRE_MINUTES = 10;
 
+// 🛡️ #900 邮箱发码冷却锁（进程内，堵死 DB 检查与插入之间的并发竞态窗口）
+// 与 /api/send-sms 的 phoneRateMap 同模式双保险；Node 进程重启自动清零（最坏多发一封，可接受）
+const emailCooldownMap = new Map<string, number>();
+
 // 生成6位数字验证码
 function generateCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -116,7 +120,7 @@ export async function POST(request: NextRequest) {
       `${restUrl}?email=eq.${encodeURIComponent(email)}&is_used=eq.false&expires_at=gt.${encodeURIComponent(now)}&order=created_at.desc&limit=1`,
       { headers }
     );
-    
+
     if (checkRes.ok) {
       const recentCodes = await checkRes.json();
       if (Array.isArray(recentCodes) && recentCodes.length > 0) {
@@ -128,6 +132,26 @@ export async function POST(request: NextRequest) {
             { status: 429 }
           );
         }
+      }
+    }
+
+    // 🛡️ #900 双保险第 2 层：进程内邮箱冷却锁
+    // 堵死 DB 检查（L115）与插入（L139）之间的竞态窗口——并发脚本同时过检可刷多封邮件
+    // 与 /api/send-sms 的 phoneRateMap 同模式；进程重启自动清零（最坏多发一封，可接受）
+    const nowMs = Date.now();
+    const lastSendMs = emailCooldownMap.get(email) ?? 0;
+    if (nowMs - lastSendMs < 60_000) {
+      const waitSeconds = Math.ceil((60_000 - (nowMs - lastSendMs)) / 1000);
+      return NextResponse.json(
+        { success: false, error: `请 ${waitSeconds} 秒后再试` },
+        { status: 429 }
+      );
+    }
+    emailCooldownMap.set(email, nowMs);
+    if (emailCooldownMap.size > 5000) {
+      // 防内存泄漏：Map 超阈值时清理过期条目（send-sms 同款兜底）
+      for (const [key, ts] of emailCooldownMap) {
+        if (nowMs - ts >= 60_000) emailCooldownMap.delete(key);
       }
     }
 

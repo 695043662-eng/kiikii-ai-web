@@ -5,6 +5,7 @@ import '@fortawesome/fontawesome-free/css/all.min.css';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { Toaster } from '@/components/ui/sonner';
 import { AIGeneratorProvider } from '@/contexts/AIGeneratorContext';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -31,7 +32,8 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <AIGeneratorProvider>
-            {children}
+            {/* 🛡️ #900 全站错误边界：任何渲染异常不再白屏，品牌化错误卡片 + 崩溃快照 + 一键恢复 */}
+            <ErrorBoundary level="root">{children}</ErrorBoundary>
           </AIGeneratorProvider>
           <Toaster position="top-center" richColors />
         </ThemeProvider>

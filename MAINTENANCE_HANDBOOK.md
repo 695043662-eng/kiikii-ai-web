@@ -6,6 +6,32 @@
 
 ---
 
+## #900 极限抗压防雪崩二期：发码竞态锁 + 轮询幽灵审计 + 节点 memo 确认 + 全站 ErrorBoundary（4 项排查）
+
+**状态**: ✅ 已修复 | **日期**: 2026-09-12
+
+### 排查结论与修复
+
+| 项 | 结论 | 处理 |
+|----|------|------|
+| 发码防刷 | 邮箱（IP DB 限流 5/h+10/d + 60s 冷却）与短信（IP 限流 + 手机号内存三重 60s/5h/10d）双保险完备；**但邮箱 60s 冷却有并发竞态窗口**（DB 检查→插入之间可被并发脚本打穿，窗口内 N 请求同时过检） | ✅ send-code 加内存级邮箱冷却锁（emailCooldownMap 60s，照 send-sms 模式），先打锁后走 DB 检查 |
+| 轮询幽灵 | useGenService unmount→stopAllPolling（L2004）+ abort 重写绑定 stopPolling + SSE 轮询 finally 防重叠；canvas globalPollingTimers unmount 清空 + 绝对超时斩断 + ghost 检测 | ✅ 无缺口 |
+| 节点渲染雪崩 | GeneratePanelNode（React.memo+自定义比较 #606 钢印）、CanvasVideo、InteractiveImageStackNode、MemoizedCanvasImage 全部隔离舱；受控 props 模式无全局 store 直订 | ✅ 无缺口 |
+| ErrorBoundary | **全站零错误边界**（实锤缺口）：任一子组件未捕获异常 → 整页白屏 | ✅ 新建 ErrorBoundary.tsx（崩溃瞬间写 kiikii_crash_log 快照 + 品牌化恢复 UI + 刷新按钮），root 层包 layout providers，canvas 层包画布主区（画布崩溃保留 Navbar） |
+
+### 验证
+- lint/ts-check/probe 全绿
+- 发码冷却实证：首次 200 success → 紧随二次 **429 "请 60 秒后再试"**（内存锁生效）
+- 429 语义与前端 60s 倒计时一致，双重校验闭环
+
+### 关键文件
+- `src/components/ErrorBoundary.tsx`（新建）
+- `src/app/layout.tsx`（root 包裹）
+- `src/app/canvas/page.tsx`（canvas 包裹）
+- `src/app/api/auth/send-code/route.ts`（邮箱冷却锁）
+
+---
+
 ## #899 深水区体检：Object URL 泄漏 + 生成按钮连击死锁 + 僵尸文件/尺寸风控 + 超时截断（4 项全站排查）
 
 **状态**: ✅ 已修复 | **日期**: 2026-09-12

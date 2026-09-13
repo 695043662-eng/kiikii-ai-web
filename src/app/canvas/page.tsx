@@ -7,6 +7,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useTheme } from 'next-themes';
 import { CanvasProvider, useCanvas, type CanvasContextType } from '@/contexts/CanvasContext';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useAIGenerator } from '@/contexts/AIGeneratorContext';
 import { useViolationGuard } from '@/hooks/useViolationGuard';
 import { useFakeProgress } from '@/hooks/useFakeProgress';
@@ -730,20 +731,22 @@ export default function CanvasPage() {
   };
   
   return (
-    <CanvasProvider>
-      {/* 🔧 #223 修复：移除多余的 AIGeneratorProvider，layout.tsx 已经有了 */}
-      {/* 🛡️ 坐标失步防御：fixed inset-0 彻底脱离文档流，物理阉割原生滚动 */}
-      <div className="fixed inset-0 w-screen h-screen flex flex-col bg-gray-100 dark:bg-gray-900 overflow-hidden touch-none">
-        {/* 【isLoggedIn 已由 AIGeneratorContext 统一管理，无需通过 props 传递】 */}
-        <MainApp />
-        <AuthModal 
-          isOpen={authModalOpen} 
-          onClose={() => setAuthModalOpen(false)} 
-          initialMode={authMode}
-          onLoginSuccess={handleLoginSuccess}
-        />
-      </div>
-    </CanvasProvider>
+    <ErrorBoundary level="canvas" fallbackTitle="画布出现了一点问题">
+      <CanvasProvider>
+        {/* 🔧 #223 修复：移除多余的 AIGeneratorProvider，layout.tsx 已经有了 */}
+        {/* 🛡️ 坐标失步防御：fixed inset-0 彻底脱离文档流，物理阉割原生滚动 */}
+        <div className="fixed inset-0 w-screen h-screen flex flex-col bg-gray-100 dark:bg-gray-900 overflow-hidden touch-none">
+          {/* 【isLoggedIn 已由 AIGeneratorContext 统一管理，无需通过 props 传递】 */}
+          <MainApp />
+          <AuthModal
+            isOpen={authModalOpen}
+            onClose={() => setAuthModalOpen(false)}
+            initialMode={authMode}
+            onLoginSuccess={handleLoginSuccess}
+          />
+        </div>
+      </CanvasProvider>
+    </ErrorBoundary>
   );
 }
 
